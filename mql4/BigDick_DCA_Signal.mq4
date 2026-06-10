@@ -48,14 +48,18 @@ extern int             InpAtrPeriod = 10;           // ATR Period
 extern bool            InpUseHA     = false;        // Dung Heikin Ashi
 extern bool            InpEnableTimeFilter = true;  // Bat Loc Khung Gio
 extern string          InpTZ  = "UTC+7";            // Timezone
-extern bool            InpEnS1 = true;              // London
-extern string          InpS1   = "1515-1815";       // London session
-extern bool            InpEnS2 = true;              // New York
-extern string          InpS2   = "2030-0045";       // New York session
-extern bool            InpEnS3 = true;              // Phien A
-extern string          InpS3   = "0730-0900";       // Phien A session
-extern bool            InpEnS4 = true;              // Tuy Chinh
-extern string          InpS4   = "1030-1315";       // Tuy Chinh session
+extern bool            InpEnS1 = true;              // Phien 1
+extern string          InpS1   = "0805-0845";       // Phien 1 session
+extern bool            InpEnS2 = true;              // Phien 2
+extern string          InpS2   = "0915-1215";       // Phien 2 session
+extern bool            InpEnS3 = true;              // Phien 3
+extern string          InpS3   = "1315-1345";       // Phien 3 session
+extern bool            InpEnS4 = true;              // Phien 4
+extern string          InpS4   = "1405-1835";       // Phien 4 session
+extern bool            InpEnS5 = true;              // Phien 5
+extern string          InpS5   = "1905-1955";       // Phien 5 session
+extern bool            InpEnS6 = true;              // Phien 6
+extern string          InpS6   = "2035-0215";       // Phien 6 session
 extern bool            InpShowTFStruct   = true;    // Hien CHoCH/BOS TF Hien Tai
 extern bool            InpShowTFOBs      = true;    // Hien OB TF Hien Tai
 extern bool            InpShowATRSignal  = true;    // Hien ATR Confirm signals
@@ -361,7 +365,9 @@ bool SessionOKAt(datetime serverTime)
     return InSessionAt(targetTime, InpEnS1, InpS1) ||
            InSessionAt(targetTime, InpEnS2, InpS2) ||
            InSessionAt(targetTime, InpEnS3, InpS3) ||
-           InSessionAt(targetTime, InpEnS4, InpS4);
+           InSessionAt(targetTime, InpEnS4, InpS4) ||
+           InSessionAt(targetTime, InpEnS5, InpS5) ||
+           InSessionAt(targetTime, InpEnS6, InpS6);
 }
 
 void checkAutoEntry()
