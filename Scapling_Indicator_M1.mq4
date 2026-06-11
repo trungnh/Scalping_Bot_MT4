@@ -1273,6 +1273,14 @@ int OnCalculate(const int      rates_total,
     
     if(rates_total < minBars) return 0;
 
+    int prevCalculated = prev_calculated;
+    static int last_rates_total = 0;
+    if(prevCalculated == 0 || last_rates_total == 0 || rates_total < last_rates_total || (rates_total - last_rates_total) > 2)
+    {
+        prevCalculated = 0;
+    }
+    last_rates_total = rates_total;
+
     ArrayResize(g_tfOBsHistory, rates_total);
     ArrayResize(g_currentBOSCountHistory, rates_total);
     ArrayResize(g_chochPendingHistory, rates_total);
@@ -1317,7 +1325,7 @@ int OnCalculate(const int      rates_total,
     ArraySetAsSeries(g_lastStructCountBuf, false);
     ArraySetAsSeries(g_atrCountBuf,  false);
 
-    if(prev_calculated == 0)
+    if(prevCalculated == 0)
     {
         DeleteAllObjects();
 
@@ -1364,7 +1372,7 @@ int OnCalculate(const int      rates_total,
         ArrayInitialize(g_obTimes,     0);
     }
 
-    int start = (prev_calculated == 0) ? InpAtrPeriod + 1 : MathMax(0, prev_calculated - 1);
+    int start = (prevCalculated == 0) ? MathMax(InpAtrPeriod + 1, rates_total - 5000) : MathMax(0, prevCalculated - 1);
     int lookback = MathMax(InpSwingLen, InpAtrPeriod) + 5;
 
     ArrayResize(g_parsedHighs, rates_total);

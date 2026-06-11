@@ -55,11 +55,13 @@ extern string          InpS2   = "0915-1215";       // Phien 2 session
 extern bool            InpEnS3 = true;              // Phien 3
 extern string          InpS3   = "1315-1345";       // Phien 3 session
 extern bool            InpEnS4 = true;              // Phien 4
-extern string          InpS4   = "1405-1835";       // Phien 4 session
+extern string          InpS4   = "1405-1655";       // Phien 4 session
 extern bool            InpEnS5 = true;              // Phien 5
-extern string          InpS5   = "1905-1955";       // Phien 5 session
+extern string          InpS5   = "1705-1750";       // Phien 5 session
 extern bool            InpEnS6 = true;              // Phien 6
-extern string          InpS6   = "2035-0215";       // Phien 6 session
+extern string          InpS6   = "1805-1850";       // Phien 6 session
+extern bool            InpEnS7 = true;              // Phien 7
+extern string          InpS7   = "2035-0215";       // Phien 7 session
 extern bool            InpShowTFStruct   = true;    // Hien CHoCH/BOS TF Hien Tai
 extern bool            InpShowTFOBs      = true;    // Hien OB TF Hien Tai
 extern bool            InpShowATRSignal  = true;    // Hien ATR Confirm signals
@@ -367,7 +369,8 @@ bool SessionOKAt(datetime serverTime)
            InSessionAt(targetTime, InpEnS3, InpS3) ||
            InSessionAt(targetTime, InpEnS4, InpS4) ||
            InSessionAt(targetTime, InpEnS5, InpS5) ||
-           InSessionAt(targetTime, InpEnS6, InpS6);
+           InSessionAt(targetTime, InpEnS6, InpS6) ||
+           InSessionAt(targetTime, InpEnS7, InpS7);
 }
 
 void checkAutoEntry()
