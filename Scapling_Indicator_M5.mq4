@@ -872,6 +872,18 @@ void CreateLabel(string name, int x, int y, string text, color col, int fontSize
 //=================================================================
 // INFO TABLE
 //=================================================================
+double GetLatestActiveOBLevel(int obBias)
+{
+    for(int i = 0; i < g_tfOBCount; i++)
+    {
+        if(g_tfOBs[i].active && g_tfOBs[i].bias == obBias)
+        {
+            return (obBias == BULLISH) ? g_tfOBs[i].barLow : g_tfOBs[i].barHigh;
+        }
+    }
+    return 0.0;
+}
+
 void UpdateInfoTable()
 {
     Comment(""); // Clear standard chart comment
@@ -888,6 +900,14 @@ void UpdateInfoTable()
     string biasStr  = g_bias == BULLISH ? "BULL" : g_bias == BEARISH ? "BEAR" : "--";
     string tfBosStr = g_chochPending ? "0" : IntegerToString(g_currentBOSCount);
     string slStr    = g_cycleSL > 0 ? DoubleToString(NormalizeDouble(g_cycleSL, 2), 2) : "--";
+
+    // Get active OB levels
+    double obBullVal = GetLatestActiveOBLevel(BULLISH);
+    double obBearVal = GetLatestActiveOBLevel(BEARISH);
+    string obBullStr = obBullVal > 0 ? DoubleToString(NormalizeDouble(obBullVal, 2), 2) : "--";
+    string obBearStr = obBearVal > 0 ? DoubleToString(NormalizeDouble(obBearVal, 2), 2) : "--";
+    color obBullColor = obBullVal > 0 ? clrLime : clrYellow;
+    color obBearColor = obBearVal > 0 ? clrRed : clrYellow;
 
     string entryPermStr = "Entry Allowed (BOS <= 2)";
     color entryPermColor = clrLime;
@@ -929,6 +949,11 @@ void UpdateInfoTable()
     
     CreateLabel(pfx + "2", x, yStart + (line++) * yStep, "TF PivL : " + DoubleToString(NormalizeDouble(g_tfLow.currentLevel,  2), 2), clrYellow, 10);
     CreateLabel(pfx + "3", x, yStart + (line++) * yStep, "TF PivH : " + DoubleToString(NormalizeDouble(g_tfHigh.currentLevel, 2), 2), clrYellow, 10);
+    
+    // Display OB levels
+    CreateLabel(pfx + "OB_BULL", x, yStart + (line++) * yStep, "TF OB_Bull: " + obBullStr, obBullColor, 10);
+    CreateLabel(pfx + "OB_BEAR", x, yStart + (line++) * yStep, "TF OB_Bear: " + obBearStr, obBearColor, 10);
+    
     CreateLabel(pfx + "4", x, yStart + (line++) * yStep, "Cycle SL: " + slStr, clrYellow, 10);
     CreateLabel(pfx + "5", x, yStart + (line++) * yStep, "TF BOS  : " + tfBosStr, clrYellow, 10);
     CreateLabel(pfx + "6", x, yStart + (line++) * yStep, "Bias    : " + biasStr, clrYellow, 10);
@@ -1096,6 +1121,13 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             if(c > g_chochPendingOBLevel && g_chochPendingOBLevel > 0)
             {
                 g_tfTrendBiasConfirmed = true;
+                g_currentBOSCount = 0;
+                g_currentATRCount = 0;
+                g_lastStructureType = 1; // CHOCH
+                g_lastStructureDirection = 1; // Bullish
+                g_lastStructureCount = 0;
+                isChoch = true;
+                
                 if(printLog)
                     Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BULLISH confirmed by breaking OB at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
                 
@@ -1112,6 +1144,13 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             if(c < g_chochPendingOBLevel && g_chochPendingOBLevel > 0)
             {
                 g_tfTrendBiasConfirmed = true;
+                g_currentBOSCount = 0;
+                g_currentATRCount = 0;
+                g_lastStructureType = 1; // CHOCH
+                g_lastStructureDirection = -1; // Bearish
+                g_lastStructureCount = 0;
+                isChoch = true;
+                
                 if(printLog)
                     Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BEARISH confirmed by breaking OB at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
                 
