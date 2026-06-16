@@ -124,9 +124,8 @@ void OnTick()
 {
 //---
    GetHigh_LowPrice();
-   showInfo();
-   
    doAction();
+   showInfo();
 }
 //+------------------------------------------------------------------+
 
@@ -229,7 +228,21 @@ int openOrd ( int oP, double entry, double sL, double tP, string cm, double mult
    }
    if ( openOrder == true)
    {
-      int tk = OrderSend(Symbol(), oP, currentLots, entry, 5, sL, tP, cm, MagicNumber, 0, StringToColor(col));
+      // Refresh rates to get the latest Bid/Ask
+      RefreshRates();
+      
+      // Select appropriate entry price based on order type
+      double executionPrice = entry;
+      if(oP == OP_BUY)  executionPrice = Ask;
+      if(oP == OP_SELL) executionPrice = Bid;
+      
+      // Normalize prices to match symbol digits
+      executionPrice = NormalizeDouble(executionPrice, Digits);
+      if(sL > 0) sL = NormalizeDouble(sL, Digits);
+      if(tP > 0) tP = NormalizeDouble(tP, Digits);
+      
+      // Send order with larger slippage (e.g., 30 points instead of 5) to prevent requote latency
+      int tk = OrderSend(Symbol(), oP, currentLots, executionPrice, 30, sL, tP, cm, MagicNumber, 0, StringToColor(col));
       if (tk <= 0) { 
          Print("Error Open Order DCA " + DoubleToStr(oP,0) + " : ",GetLastError());
          
@@ -1281,8 +1294,10 @@ void Draw(string name,string label,int size,string font,color clr,int corner,int
 {
    int windows=0;
    
-   ObjectDelete(name);
-   ObjectCreate(name,OBJ_LABEL,windows,0,0);
+   if(ObjectFind(0, name) < 0)
+   {
+      ObjectCreate(name,OBJ_LABEL,windows,0,0);
+   }
    ObjectSetText(name,label,size,font,clr);
    ObjectSet(name,OBJPROP_CORNER,corner);
    ObjectSet(name,OBJPROP_XDISTANCE,x);
@@ -1310,16 +1325,18 @@ bool RectLabelCreate(const long             chart_ID=0,               // chart's
                      const bool             hidden=true,              // hidden in the object list
                      const long             z_order=0)                // priority for mouse click
   {
-  ObjectDelete(name);
 //--- reset the error value
    ResetLastError();
-//--- create a rectangle label
-   if(!ObjectCreate(chart_ID,name,OBJ_RECTANGLE_LABEL,sub_window,0,0))
-     {
-      Print(__FUNCTION__,
-            ": failed to create a rectangle label! Error code = ",GetLastError());
-      return(false);
-     }
+//--- create a rectangle label if it doesn't exist
+   if(ObjectFind(chart_ID, name) < 0)
+   {
+      if(!ObjectCreate(chart_ID,name,OBJ_RECTANGLE_LABEL,sub_window,0,0))
+      {
+         Print(__FUNCTION__,
+               ": failed to create a rectangle label! Error code = ",GetLastError());
+         return(false);
+      }
+   }
 //--- set label coordinates
    ObjectSetInteger(chart_ID,name,OBJPROP_XDISTANCE,x);
    ObjectSetInteger(chart_ID,name,OBJPROP_YDISTANCE,y);
