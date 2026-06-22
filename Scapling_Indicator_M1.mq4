@@ -1071,7 +1071,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 g_chochPending = false;
                 g_tfTrendBias = BULLISH;
                 g_tfTrendBiasConfirmed = true;
-                g_currentBOSCount = 0;
+                if(g_currentBOSCount == 0) g_currentBOSCount = 0;
                 g_currentATRCount = 0;
                 g_lastStructureType = 1; // CHOCH
                 g_lastStructureDirection = 1; // Bullish
@@ -1095,7 +1095,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 g_chochPending = false;
                 g_tfTrendBias = BEARISH;
                 g_tfTrendBiasConfirmed = true;
-                g_currentBOSCount = 0;
+                if(g_currentBOSCount == 0) g_currentBOSCount = 0;
                 g_currentATRCount = 0;
                 g_lastStructureType = 1; // CHOCH
                 g_lastStructureDirection = -1; // Bearish
@@ -1121,7 +1121,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             if(c > g_chochPendingOBLevel && g_chochPendingOBLevel > 0)
             {
                 g_tfTrendBiasConfirmed = true;
-                g_currentBOSCount = 0;
+                if(g_currentBOSCount == 0) g_currentBOSCount = 0;
                 g_currentATRCount = 0;
                 g_lastStructureType = 1; // CHOCH
                 g_lastStructureDirection = 1; // Bullish
@@ -1144,7 +1144,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             if(c < g_chochPendingOBLevel && g_chochPendingOBLevel > 0)
             {
                 g_tfTrendBiasConfirmed = true;
-                g_currentBOSCount = 0;
+                if(g_currentBOSCount == 0) g_currentBOSCount = 0;
                 g_currentATRCount = 0;
                 g_lastStructureType = 1; // CHOCH
                 g_lastStructureDirection = -1; // Bearish
