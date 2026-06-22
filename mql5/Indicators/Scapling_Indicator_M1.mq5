@@ -1,11 +1,29 @@
 //+------------------------------------------------------------------+
-//| XAUUSD Price Action Scalping Indicator M5                        |
+//| XAUUSD Price Action Scalping Indicator M1                        |
 //| Converted to MQL4 from Scapling_Indicator.mq5                    |
 //+------------------------------------------------------------------+
 #property copyright "XAUUSD PA Scalping Indicator"
 #property version   "1.0"
 #property indicator_chart_window
 #property indicator_buffers 9
+#property indicator_plots   3
+
+// Plot 1 — ATR Trailing Stop (đường màu xanh)
+#property indicator_label1  "ATR Stop"
+#property indicator_type1   DRAW_LINE
+#property indicator_color1  clrDodgerBlue
+#property indicator_width1  1
+#property indicator_style1  STYLE_SOLID
+
+// Plot 2 — ATR Buy confirm (mũi tên lên)
+#property indicator_label2  "ATR Buy"
+#property indicator_type2   DRAW_ARROW
+#property indicator_color2  C'8,153,129'
+
+// Plot 3 — ATR Sell confirm (mũi tên xuống)
+#property indicator_label3  "ATR Sell"
+#property indicator_type3   DRAW_ARROW
+#property indicator_color3  C'242,54,69'
 
 // Plot 1 — ATR Trailing Stop (đường màu xanh)
 #property indicator_color1  clrDodgerBlue
@@ -73,6 +91,10 @@ input bool  InpShowSessionBox = false;   // Vẽ box phiên
 //=================================================================
 // STRUCTS
 //=================================================================
+// ATR handles for MT5
+int g_atrHandle = INVALID_HANDLE;
+int g_atr200Handle = INVALID_HANDLE;
+
 struct SPivot
 {
     double   currentLevel;
@@ -228,15 +250,15 @@ string NewObjName(string tag)
 
 void DelObj(string name)
 {
-    if(name != "" && ObjectFind(name) >= 0)
-        ObjectDelete(name);
+    if(name != "" && ObjectFind(0, name) >= 0)
+        ObjectDelete(0, name);
 }
 
 void CreateLine(string name, datetime t1, double p1, datetime t2, double p2,
                 color col, int style, int width, bool rayRight=false)
 {
-    if(ObjectFind(name) < 0)
-        ObjectCreate(name, OBJ_TREND, 0, t1, p1, t2, p2);
+    if(ObjectFind(0, name) < 0)
+        ObjectCreate(0, name, OBJ_TREND, 0, t1, p1, t2, p2);
     ObjectSetInteger(0, name, OBJPROP_COLOR,     col);
     ObjectSetInteger(0, name, OBJPROP_STYLE,     style);
     ObjectSetInteger(0, name, OBJPROP_WIDTH,     width);
@@ -248,8 +270,8 @@ void CreateLine(string name, datetime t1, double p1, datetime t2, double p2,
 void CreateText(string name, datetime t, double price, string txt,
                 color col, int fontSize, int anchor=ANCHOR_LOWER)
 {
-    if(ObjectFind(name) < 0)
-        ObjectCreate(name, OBJ_TEXT, 0, t, price);
+    if(ObjectFind(0, name) < 0)
+        ObjectCreate(0, name, OBJ_TEXT, 0, t, price);
     ObjectSetString( 0, name, OBJPROP_TEXT,      txt);
     ObjectSetInteger(0, name, OBJPROP_COLOR,     col);
     ObjectSetInteger(0, name, OBJPROP_FONTSIZE,  fontSize);
@@ -261,8 +283,8 @@ void CreateText(string name, datetime t, double price, string txt,
 void CreateBox(string name, datetime t1, double top, datetime t2, double bot,
                color bgCol, color borderCol, int borderWidth=1)
 {
-    if(ObjectFind(name) < 0)
-        ObjectCreate(name, OBJ_RECTANGLE, 0, t1, top, t2, bot);
+    if(ObjectFind(0, name) < 0)
+        ObjectCreate(0, name, OBJ_RECTANGLE, 0, t1, top, t2, bot);
     ObjectSetInteger(0, name, OBJPROP_COLOR,     borderCol);
     ObjectSetInteger(0, name, OBJPROP_STYLE,     STYLE_SOLID);
     ObjectSetInteger(0, name, OBJPROP_WIDTH,     borderWidth);
@@ -274,31 +296,31 @@ void CreateBox(string name, datetime t1, double top, datetime t2, double bot,
 
 void BoxSetRight(string name, datetime t2)
 {
-    if(name != "" && ObjectFind(name) >= 0)
+    if(name != "" && ObjectFind(0, name) >= 0)
         ObjectSetInteger(0, name, OBJPROP_TIME, 1, t2);
 }
 
 void BoxSetTop(string name, double top)
 {
-    if(name != "" && ObjectFind(name) >= 0)
+    if(name != "" && ObjectFind(0, name) >= 0)
         ObjectSetDouble(0, name, OBJPROP_PRICE, 0, top);
 }
 
 void BoxSetBottom(string name, double bot)
 {
-    if(name != "" && ObjectFind(name) >= 0)
+    if(name != "" && ObjectFind(0, name) >= 0)
         ObjectSetDouble(0, name, OBJPROP_PRICE, 1, bot);
 }
 
 void BoxSetBgColor(string name, color col)
 {
-    if(name != "" && ObjectFind(name) >= 0)
+    if(name != "" && ObjectFind(0, name) >= 0)
         ObjectSetInteger(0, name, OBJPROP_BGCOLOR, col);
 }
 
 void TextSetXY(string name, datetime t, double price)
 {
-    if(name != "" && ObjectFind(name) >= 0)
+    if(name != "" && ObjectFind(0, name) >= 0)
     {
         ObjectSetInteger(0, name, OBJPROP_TIME,  0, t);
         ObjectSetDouble( 0, name, OBJPROP_PRICE, 0, price);
@@ -307,13 +329,13 @@ void TextSetXY(string name, datetime t, double price)
 
 void TextSetText(string name, string txt)
 {
-    if(name != "" && ObjectFind(name) >= 0)
+    if(name != "" && ObjectFind(0, name) >= 0)
         ObjectSetString(0, name, OBJPROP_TEXT, txt);
 }
 
 void LineSetX2(string name, datetime t2)
 {
-    if(name != "" && ObjectFind(name) >= 0)
+    if(name != "" && ObjectFind(0, name) >= 0)
         ObjectSetInteger(0, name, OBJPROP_TIME, 1, t2);
 }
 
@@ -666,7 +688,7 @@ void UpdateTFStructure(const MqlRates &rates[], datetime curTime, bool &chochBul
 
             if(InpShowTFStruct)
             {
-                tag = chochBull ? "5CHoCH" : "5BOS";
+                tag = chochBull ? "1CHoCH" : "1BOS";
                 col = chochBull ? C_COBALT : C_GREEN;
                 DrawStructure(g_tfHigh, tag, col, STYLE_DASH, 7, curTime, chochBull);
             }
@@ -697,7 +719,7 @@ void UpdateTFStructure(const MqlRates &rates[], datetime curTime, bool &chochBul
 
             if(InpShowTFStruct)
             {
-                tag = chochBear ? "5CHoCH" : "5BOS";
+                tag = chochBear ? "1CHoCH" : "1BOS";
                 col = chochBear ? C_YELLOW : C_RED;
                 DrawStructure(g_tfLow, tag, col, STYLE_DASH, 7, curTime, chochBear);
             }
@@ -854,7 +876,7 @@ void RunStateMachine(double curClose, double curHigh, double curLow, double curO
 
 void CreateLabel(string name, int x, int y, string text, color col, int fontSize, int corner = CORNER_LEFT_LOWER)
 {
-    if(ObjectFind(name) < 0)
+    if(ObjectFind(0, name) < 0)
     {
         ObjectCreate(0, name, OBJ_LABEL, 0, 0, 0);
     }
@@ -909,16 +931,16 @@ void UpdateInfoTable()
     color obBullColor = obBullVal > 0 ? clrLime : clrYellow;
     color obBearColor = obBearVal > 0 ? clrRed : clrYellow;
 
-    string entryPermStr = "Entry Allowed (BOS <= 2)";
+    string entryPermStr = "Entry Allowed (BOS <= 1)";
     color entryPermColor = clrLime;
     if(g_chochPending)
     {
         entryPermStr = "No Entry (CHOCH Pending)";
         entryPermColor = clrRed;
     }
-    else if(g_currentBOSCount >= 3)
+    else if(g_currentBOSCount >= 2)
     {
-        entryPermStr = "No Entry (BOS >= 3)";
+        entryPermStr = "No Entry (BOS >= 2)";
         entryPermColor = clrRed;
     }
 
@@ -959,7 +981,7 @@ void UpdateInfoTable()
     CreateLabel(pfx + "6", x, yStart + (line++) * yStep, "Bias    : " + biasStr, clrYellow, 10);
     CreateLabel(pfx + "7", x, yStart + (line++) * yStep, "State   : " + stateStr, clrYellow, 10);
     CreateLabel(pfx + "8", x, yStart + (line++) * yStep, "Status  : " + entryPermStr, entryPermColor, 10);
-    CreateLabel(pfx + "9", x, yStart + (line++) * yStep, "=== M5 PA Scalping ===", clrYellow, 10);
+    CreateLabel(pfx + "9", x, yStart + (line++) * yStep, "=== M1 PA Scalping ===", clrYellow, 10);
 }
 
 
@@ -1026,9 +1048,9 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             isChoch = true;
             if(printLog)
                 Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bullish XIN (Immediate) confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
-            if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
+            if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                 ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_GREEN);
-            if(g_pendingChochTextObj != "" && ObjectFind(g_pendingChochTextObj) >= 0)
+            if(g_pendingChochTextObj != "" && ObjectFind(0, g_pendingChochTextObj) >= 0)
                 ObjectSetInteger(0, g_pendingChochTextObj, OBJPROP_COLOR, C_GREEN);
             g_pendingChochLineObj = "";
             g_pendingChochTextObj = "";
@@ -1053,9 +1075,9 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             isChoch = true;
             if(printLog)
                 Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bearish XIN (Immediate) confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
-            if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
+            if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                 ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_RED);
-            if(g_pendingChochTextObj != "" && ObjectFind(g_pendingChochTextObj) >= 0)
+            if(g_pendingChochTextObj != "" && ObjectFind(0, g_pendingChochTextObj) >= 0)
                 ObjectSetInteger(0, g_pendingChochTextObj, OBJPROP_COLOR, C_RED);
             g_pendingChochLineObj = "";
             g_pendingChochTextObj = "";
@@ -1080,9 +1102,9 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 if(printLog)
                     Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bullish XIN confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
 
-                if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
+                if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_GREEN);
-                if(g_pendingChochTextObj != "" && ObjectFind(g_pendingChochTextObj) >= 0)
+                if(g_pendingChochTextObj != "" && ObjectFind(0, g_pendingChochTextObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochTextObj, OBJPROP_COLOR, C_GREEN);
                 g_pendingChochLineObj = "";
                 g_pendingChochTextObj = "";
@@ -1104,9 +1126,9 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 if(printLog)
                     Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bearish XIN confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
 
-                if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
+                if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_RED);
-                if(g_pendingChochTextObj != "" && ObjectFind(g_pendingChochTextObj) >= 0)
+                if(g_pendingChochTextObj != "" && ObjectFind(0, g_pendingChochTextObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochTextObj, OBJPROP_COLOR, C_RED);
                 g_pendingChochLineObj = "";
                 g_pendingChochTextObj = "";
@@ -1131,9 +1153,9 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 if(printLog)
                     Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BULLISH confirmed by breaking OB at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
                 
-                if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
+                if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_GREEN);
-                if(g_pendingChochTextObj != "" && ObjectFind(g_pendingChochTextObj) >= 0)
+                if(g_pendingChochTextObj != "" && ObjectFind(0, g_pendingChochTextObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochTextObj, OBJPROP_COLOR, C_GREEN);
                 g_pendingChochLineObj = "";
                 g_pendingChochTextObj = "";
@@ -1154,9 +1176,9 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 if(printLog)
                     Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BEARISH confirmed by breaking OB at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
                 
-                if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
+                if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_RED);
-                if(g_pendingChochTextObj != "" && ObjectFind(g_pendingChochTextObj) >= 0)
+                if(g_pendingChochTextObj != "" && ObjectFind(0, g_pendingChochTextObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochTextObj, OBJPROP_COLOR, C_RED);
                 g_pendingChochLineObj = "";
                 g_pendingChochTextObj = "";
@@ -1236,50 +1258,36 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
 //=================================================================
 int OnInit()
 {
-    SetIndexBuffer(0, g_atrStopBuf);
-    SetIndexBuffer(1, g_atrBuyBuf);
-    SetIndexBuffer(2, g_atrSellBuf);
-    SetIndexBuffer(3, g_chochBuf);
-    SetIndexBuffer(4, g_bosBuf);
-    SetIndexBuffer(5, g_atrSigBuf);
-    SetIndexBuffer(6, g_lastStructTypeBuf);
-    SetIndexBuffer(7, g_lastStructCountBuf);
-    SetIndexBuffer(8, g_atrCountBuf);
+    SetIndexBuffer(0, g_atrStopBuf, INDICATOR_DATA);
+    SetIndexBuffer(1, g_atrBuyBuf, INDICATOR_DATA);
+    SetIndexBuffer(2, g_atrSellBuf, INDICATOR_DATA);
+    SetIndexBuffer(3, g_chochBuf, INDICATOR_CALCULATIONS);
+    SetIndexBuffer(4, g_bosBuf, INDICATOR_CALCULATIONS);
+    SetIndexBuffer(5, g_atrSigBuf, INDICATOR_CALCULATIONS);
+    SetIndexBuffer(6, g_lastStructTypeBuf, INDICATOR_CALCULATIONS);
+    SetIndexBuffer(7, g_lastStructCountBuf, INDICATOR_CALCULATIONS);
+    SetIndexBuffer(8, g_atrCountBuf, INDICATOR_CALCULATIONS);
 
-    SetIndexStyle(0, DRAW_LINE, STYLE_SOLID, 1, clrDodgerBlue);
-    SetIndexStyle(1, DRAW_ARROW, STYLE_SOLID, 1, C'8,153,129');
-    SetIndexArrow(1, 233); // up arrow
-    SetIndexStyle(2, DRAW_ARROW, STYLE_SOLID, 1, C'242,54,69');
-    SetIndexArrow(2, 234); // down arrow
+    PlotIndexSetDouble(0, PLOT_EMPTY_VALUE, 0.0);
+    PlotIndexSetDouble(1, PLOT_EMPTY_VALUE, 0.0);
+    PlotIndexSetDouble(2, PLOT_EMPTY_VALUE, 0.0);
 
-    SetIndexStyle(3, DRAW_NONE);
-    SetIndexStyle(4, DRAW_NONE);
-    SetIndexStyle(5, DRAW_NONE);
-    SetIndexStyle(6, DRAW_NONE);
-    SetIndexStyle(7, DRAW_NONE);
-    SetIndexStyle(8, DRAW_NONE);
+    PlotIndexSetInteger(1, PLOT_ARROW, 233);
+    PlotIndexSetInteger(2, PLOT_ARROW, 234);
 
-    SetIndexEmptyValue(0, 0.0);
-    SetIndexEmptyValue(1, 0.0);
-    SetIndexEmptyValue(2, 0.0);
-    SetIndexEmptyValue(3, 0.0);
-    SetIndexEmptyValue(4, 0.0);
-    SetIndexEmptyValue(5, 0.0);
-    SetIndexEmptyValue(6, 0.0);
-    SetIndexEmptyValue(7, 0.0);
-    SetIndexEmptyValue(8, 0.0);
+    PlotIndexSetString(0, PLOT_LABEL, "ATR Stop");
+    PlotIndexSetString(1, PLOT_LABEL, "ATR Buy");
+    PlotIndexSetString(2, PLOT_LABEL, "ATR Sell");
 
-    SetIndexLabel(0, "ATR Stop");
-    SetIndexLabel(1, "ATR Buy");
-    SetIndexLabel(2, "ATR Sell");
-    SetIndexLabel(3, "CHOCH Signal");
-    SetIndexLabel(4, "BOS Signal");
-    SetIndexLabel(5, "ATR Signal");
-    SetIndexLabel(6, "Last Struct Type");
-    SetIndexLabel(7, "Last Struct Count");
-    SetIndexLabel(8, "ATR Count");
+    g_atrHandle = iATR(_Symbol, PERIOD_CURRENT, InpAtrPeriod);
+    g_atr200Handle = iATR(_Symbol, PERIOD_CURRENT, 200);
+    if(g_atrHandle == INVALID_HANDLE || g_atr200Handle == INVALID_HANDLE)
+    {
+        Print("ERROR: Cannot create ATR handles");
+        return INIT_FAILED;
+    }
 
-    Print("XAUUSD PA Scalping Indicator M5 initialized.");
+    Print("XAUUSD PA Scalping Indicator M1 initialized.");
     return INIT_SUCCEEDED;
 }
 
@@ -1290,6 +1298,8 @@ void OnDeinit(const int reason)
 {
     DeleteAllObjects();
     Comment("");
+    if(g_atrHandle != INVALID_HANDLE) IndicatorRelease(g_atrHandle);
+    if(g_atr200Handle != INVALID_HANDLE) IndicatorRelease(g_atr200Handle);
     ChartRedraw(0);
 }
 
@@ -1319,6 +1329,13 @@ int OnCalculate(const int      rates_total,
         prevCalculated = 0;
     }
     last_rates_total = rates_total;
+
+    // Copy full ATR buffers for MT5
+    double atrBuf[], atr200Buf[];
+    ArraySetAsSeries(atrBuf,    true);
+    ArraySetAsSeries(atr200Buf, true);
+    int nAtr    = CopyBuffer(g_atrHandle,    0, 0, rates_total, atrBuf);
+    int nAtr200 = CopyBuffer(g_atr200Handle, 0, 0, rates_total, atr200Buf);
 
     ArrayResize(g_tfOBsHistory, rates_total);
     ArrayResize(g_currentBOSCountHistory, rates_total);
@@ -1422,7 +1439,7 @@ int OnCalculate(const int      rates_total,
 
     for(i = start; i < rates_total - 1; i++)
     {
-        if(i > 0 && (i > start || prevCalculated > 0))
+        if(i > 0)
         {
             g_currentBOSCount = g_currentBOSCountHistory[i-1];
             g_chochPending = g_chochPendingHistory[i-1];
@@ -1511,8 +1528,8 @@ int OnCalculate(const int      rates_total,
         }
 
         int shift = rates_total - 1 - i;
-        double atrVal    = iATR(NULL, 0, InpAtrPeriod, shift);
-        double atr200Val = iATR(NULL, 0, 200, shift);
+        double atrVal    = (shift < nAtr    && nAtr    > 0) ? atrBuf[shift]    : 0.0;
+        double atr200Val = (shift < nAtr200 && nAtr200 > 0) ? atr200Buf[shift] : 0.0;
 
         bool isChoch = false;
         bool isBos = false;

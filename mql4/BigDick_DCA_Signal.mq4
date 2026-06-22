@@ -10,25 +10,6 @@
 
 #define OP_BUYSELL 999
 
-enum modetrade
-  {
-   ONLY_BUY = 1,  // BUY
-   ONLY_SELL = 2, // SELL
-   BUY_AND_SELL = 3,       // BUY & SELL
-  };
-
-enum tradingType
-  {
-   SECOND = 1,  // Vao Lenh Mac Dinh
-   CANDLE = 2,  // Vao Lenh Theo Nen Xanh Do
-  };  
-  
-enum boolType
-  {
-   TRUE_VAL = 1,  // true
-   FALSE_VAL = 2, // false
-  };  
-
 extern int MagicNumber = 179092;                                     // Magic Number
 
 extern string ________AUTO_ENTRY________ = "============== AUTO ENTRY ==============";
@@ -70,6 +51,10 @@ extern bool            InpShowSessionBox = false;   // Ve box phien
 
 datetime lastBuyTime = 0;
 datetime lastSellTime = 0;
+datetime lastM1BarTime = 0;
+datetime lastOrderTime = 0;
+int lastTotalOrdBuy = -1;
+int lastTotalOrdSell = -1;
 
 
 extern string ________GENERAL________ = "============== GENERAL ==============";  
@@ -212,8 +197,8 @@ int GetM5TrendBias()
    {
       double choch = GetM5IndicatorValue(3, i);
       double bos   = GetM5IndicatorValue(4, i);
-      if(choch != 0.0) return (choch > 0.0) ? 1 : -1;
-      if(bos != 0.0)   return (bos > 0.0)   ? 1 : -1;
+      if(MathAbs(choch) >= 0.9) return (choch > 0.0) ? 1 : -1;
+      if(bos != 0.0)            return (bos > 0.0)   ? 1 : -1;
    }
    return 0;
 }
@@ -224,8 +209,8 @@ int GetM1TrendDirection()
    {
       double choch = GetM1IndicatorValue(3, i);
       double bos   = GetM1IndicatorValue(4, i);
-      if(choch != 0.0) return (choch > 0.0) ? 1 : -1;
-      if(bos != 0.0)   return (bos > 0.0)   ? 1 : -1;
+      if(MathAbs(choch) >= 0.9) return (choch > 0.0) ? 1 : -1;
+      if(bos != 0.0)            return (bos > 0.0)   ? 1 : -1;
    }
    return 0;
 }
@@ -532,7 +517,12 @@ void doAction ()
 {
    if (EnableAutoEntry)
    {
-      checkAutoEntry();
+      datetime currentM1BarTime = iTime(Symbol(), PERIOD_M1, 0);
+      if (currentM1BarTime > 0 && currentM1BarTime != lastM1BarTime)
+      {
+         checkAutoEntry();
+         lastM1BarTime = currentM1BarTime;
+      }
    }
    doActionBuy();
    doActionSell();
@@ -541,6 +531,7 @@ void doAction ()
 
 void doActionBuy()
 {
+   if (TimeCurrent() - lastOrderTime < delayTime) return;
    // Lenh L2-n
    if (totalOrdBuy != 0 && totalOrdBuy < maxOrderBUY)
    {
@@ -560,19 +551,15 @@ void doActionBuy()
       {
          int tmp = openOrd (ORDER_TYPE_BUY, price, sl, tp, cm, multiple, baseLotsize);
          if (tmp > 0) {
-            // Modify SL - TP
-            double BE_Buy = breakeven(Symbol(), ORDER_TYPE_BUY, MagicNumber, baseLotsize);
-            double buyAllTP = (BE_Buy + pipTP*10*MarketInfo(Symbol(), MODE_POINT));
-            modifyTP (Symbol(), ORDER_TYPE_BUY, buyAllTP, sl);
+            UpdateBasketTP(ORDER_TYPE_BUY);
          }
-         
-         Sleep(delayTime*1000);
       }
    }
 }
 
 void doActionSell()
 {
+   if (TimeCurrent() - lastOrderTime < delayTime) return;
    // Lenh L2-n
    if (totalOrdSell != 0 && totalOrdSell < maxOrderSELL)
    {
@@ -592,13 +579,8 @@ void doActionSell()
       {
          int tmp = openOrd (ORDER_TYPE_SELL, price, sl, tp, cm, multiple, baseLotsize);
          if (tmp > 0) {
-            // Modify SL - TP
-            double BE_Sell = breakeven(Symbol(), ORDER_TYPE_SELL, MagicNumber, baseLotsize);
-            double sellAllTP = (BE_Sell - pipTP*10*MarketInfo(Symbol(), MODE_POINT));
-            modifyTP (Symbol(), ORDER_TYPE_SELL, sellAllTP, sl);
+            UpdateBasketTP(ORDER_TYPE_SELL);
          }
-         
-         Sleep(delayTime*1000);
       }
    }
 }
@@ -631,15 +613,17 @@ int openOrd ( int oP, double entry, double sL, double tP, string cm, double mult
       if(tP > 0) tP = NormalizeDouble(tP, Digits);
       
       // Send order with larger slippage (e.g., 30 points instead of 5) to prevent requote latency
-      int tk = OrderSend(Symbol(), oP, currentLots, executionPrice, 30, sL, tP, cm, MagicNumber, 0, StringToColor(col));
-      if (tk <= 0) { 
-         Print("Error Open Order DCA " + DoubleToStr(oP,0) + " : ",GetLastError());
-         
-         return (0);
-      }
-   }
-   
-   return (1);
+       int tk = OrderSend(Symbol(), oP, currentLots, executionPrice, 30, sL, tP, cm, MagicNumber, 0, StringToColor(col));
+       if (tk <= 0) { 
+          Print("Error Open Order DCA " + DoubleToStr(oP,0) + " : ",GetLastError());
+          
+          return (0);
+       }
+       lastOrderTime = TimeCurrent();
+       return (1);
+    }
+    
+    return (0);
 }// End int openOrd()
 
 void modifyTP(string symbol, int oP, double tp, double sl)
@@ -657,6 +641,36 @@ void modifyTP(string symbol, int oP, double tp, double sl)
       }
    }
 }// End void modifyTP()
+
+void UpdateBasketTP(int oP, int oldTotal = -1, int newTotal = -1)
+{
+   if (oP == OP_BUY)
+   {
+      if (totalOrdBuy >= 2)
+      {
+         double BE_Buy = breakeven(Symbol(), OP_BUY, MagicNumber, baseLotsize);
+         double sl = (pipSL == 0) ? 0 : (lowPriceBuy - (pipSL * 10 * MarketInfo(Symbol(), MODE_POINT)));
+         double buyAllTP = (BE_Buy + pipTP*10*MarketInfo(Symbol(), MODE_POINT));
+         modifyTP (Symbol(), OP_BUY, buyAllTP, sl);
+         if (oldTotal != -1 && newTotal != -1) {
+            Print("[Self-Healing] Detected Buy Position Count Change: ", oldTotal, " -> ", newTotal, ". Re-modified TP to: ", buyAllTP);
+         }
+      }
+   }
+   else if (oP == OP_SELL)
+   {
+      if (totalOrdSell >= 2)
+      {
+         double BE_Sell = breakeven(Symbol(), OP_SELL, MagicNumber, baseLotsize);
+         double sl = (pipSL == 0) ? 0 : (higPriceSell + (pipSL * 10 * MarketInfo(Symbol(), MODE_POINT)));
+         double sellAllTP = (BE_Sell - pipTP*10*MarketInfo(Symbol(), MODE_POINT));
+         modifyTP (Symbol(), OP_SELL, sellAllTP, sl);
+         if (oldTotal != -1 && newTotal != -1) {
+            Print("[Self-Healing] Detected Sell Position Count Change: ", oldTotal, " -> ", newTotal, ". Re-modified TP to: ", sellAllTP);
+         }
+      }
+   }
+}
 
 double breakeven(string symBE, int bTyp, int mNumber, double addLot)
 {
@@ -872,8 +886,26 @@ void GetHigh_LowPrice()
    totalProfit = profit + swap;
    
    // Tinh lotsize theo balance
-   CalculateLotsizeBasedOnBalance();
-   
+    CalculateLotsizeBasedOnBalance();
+    
+    // Self-Healing Double-Insurance TP Modification
+    if (lastTotalOrdBuy == -1)  lastTotalOrdBuy = totalOrdBuy;
+    if (lastTotalOrdSell == -1) lastTotalOrdSell = totalOrdSell;
+       if (totalOrdBuy != lastTotalOrdBuy)
+   // Self-Healing Double-Insurance TP Modification
+   if (lastTotalOrdBuy == -1)  lastTotalOrdBuy = totalOrdBuy;
+   if (lastTotalOrdSell == -1) lastTotalOrdSell = totalOrdSell;
+   if (totalOrdBuy != lastTotalOrdBuy)
+    {
+       UpdateBasketTP(ORDER_TYPE_BUY, lastTotalOrdBuy, totalOrdBuy);
+       lastTotalOrdBuy = totalOrdBuy;
+    }
+     
+   if (totalOrdSell != lastTotalOrdSell)
+    {
+       UpdateBasketTP(ORDER_TYPE_SELL, lastTotalOrdSell, totalOrdSell);
+       lastTotalOrdSell = totalOrdSell;
+    }
 } // End void GetHigh_LowPrice()
 //+------------------------------------------------------------------+
 
@@ -961,9 +993,6 @@ int BuyPressed (const long chartID, const string action)
    if (totalOrdBuy == 0)
    {
       openOrd (ORDER_TYPE_BUY, price, sl, tp, cm, 1, baseLotsize);
-      
-      Sleep(delayTime*1000);
-      
    }
    
    return (0);
@@ -986,9 +1015,6 @@ int SellPressed (const long chartID, const string action)
    if (totalOrdSell == 0)
    {
       openOrd (ORDER_TYPE_SELL, price, sl, tp, cm, 1, baseLotsize);
-      
-      Sleep(delayTime*1000);
-      
    }
    
    return (0);
@@ -1093,6 +1119,7 @@ int closeNegativeOrders ()
       ArrayResize(tickets, count + 1);
       ArrayResize(lots,    count + 1);
       ArrayResize(types,   count + 1);
+      ArrayResize(profits, count + 1);
       tickets[count] = OrderTicket();
       lots[count]    = OrderLots();
       types[count]   = OrderType();
@@ -1198,6 +1225,7 @@ int closePositiveOrders ()
       ArrayResize(tickets, count + 1);
       ArrayResize(lots,    count + 1);
       ArrayResize(types,   count + 1);
+      ArrayResize(profits, count + 1);
       tickets[count] = OrderTicket();
       lots[count]    = OrderLots();
       types[count]   = OrderType();

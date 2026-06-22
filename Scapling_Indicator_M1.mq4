@@ -1422,7 +1422,7 @@ int OnCalculate(const int      rates_total,
 
     for(i = start; i < rates_total - 1; i++)
     {
-        if(i > 0)
+        if(i > 0 && (i > start || prevCalculated > 0))
         {
             g_currentBOSCount = g_currentBOSCountHistory[i-1];
             g_chochPending = g_chochPendingHistory[i-1];

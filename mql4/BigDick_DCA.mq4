@@ -92,6 +92,9 @@ int dig;
 int normalLotUnit = 2;
 
 datetime trial_end_date = D'10.12.2024';
+datetime lastOrderTime = 0;
+int lastTotalOrdBuy = -1;
+int lastTotalOrdSell = -1;
 
 int OnInit()
   {
@@ -152,6 +155,7 @@ void doAction ()
 
 void doActionBuy()
 {
+   if (TimeCurrent() - lastOrderTime < delayTime) return;
    // Lenh L2-n
    if (totalOrdBuy != 0 && totalOrdBuy < maxOrderBUY)
    {
@@ -171,19 +175,15 @@ void doActionBuy()
       {
          int tmp = openOrd (ORDER_TYPE_BUY, price, sl, tp, cm, multiple, baseLotsize);
          if (tmp > 0) {
-            // Modify SL - TP
-            double BE_Buy = breakeven(Symbol(), ORDER_TYPE_BUY, MagicNumber, baseLotsize);
-            double buyAllTP = (BE_Buy + pipTP*10*MarketInfo(Symbol(), MODE_POINT));
-            modifyTP (Symbol(), ORDER_TYPE_BUY, buyAllTP, sl);
+            UpdateBasketTP(ORDER_TYPE_BUY);
          }
-         
-         Sleep(delayTime*1000);
       }
    }
 }
 
 void doActionSell()
 {
+   if (TimeCurrent() - lastOrderTime < delayTime) return;
    // Lenh L2-n
    if (totalOrdSell != 0 && totalOrdSell < maxOrderSELL)
    {
@@ -203,13 +203,8 @@ void doActionSell()
       {
          int tmp = openOrd (ORDER_TYPE_SELL, price, sl, tp, cm, multiple, baseLotsize);
          if (tmp > 0) {
-            // Modify SL - TP
-            double BE_Sell = breakeven(Symbol(), ORDER_TYPE_SELL, MagicNumber, baseLotsize);
-            double sellAllTP = (BE_Sell - pipTP*10*MarketInfo(Symbol(), MODE_POINT));
-            modifyTP (Symbol(), ORDER_TYPE_SELL, sellAllTP, sl);
+            UpdateBasketTP(ORDER_TYPE_SELL);
          }
-         
-         Sleep(delayTime*1000);
       }
    }
 }
@@ -248,9 +243,11 @@ int openOrd ( int oP, double entry, double sL, double tP, string cm, double mult
          
          return (0);
       }
+      lastOrderTime = TimeCurrent();
+      return (1);
    }
    
-   return (1);
+   return (0);
 }// End int openOrd()
 
 void modifyTP(string symbol, int oP, double tp, double sl)
@@ -268,6 +265,36 @@ void modifyTP(string symbol, int oP, double tp, double sl)
       }
    }
 }// End void modifyTP()
+
+void UpdateBasketTP(int oP, int oldTotal = -1, int newTotal = -1)
+{
+   if (oP == OP_BUY)
+   {
+      if (totalOrdBuy >= 2)
+      {
+         double BE_Buy = breakeven(Symbol(), OP_BUY, MagicNumber, baseLotsize);
+         double sl = (pipSL == 0) ? 0 : (lowPriceBuy - (pipSL * 10 * MarketInfo(Symbol(), MODE_POINT)));
+         double buyAllTP = (BE_Buy + pipTP*10*MarketInfo(Symbol(), MODE_POINT));
+         modifyTP (Symbol(), OP_BUY, buyAllTP, sl);
+         if (oldTotal != -1 && newTotal != -1) {
+            Print("[Self-Healing] Detected Buy Position Count Change: ", oldTotal, " -> ", newTotal, ". Re-modified TP to: ", buyAllTP);
+         }
+      }
+   }
+   else if (oP == OP_SELL)
+   {
+      if (totalOrdSell >= 2)
+      {
+         double BE_Sell = breakeven(Symbol(), OP_SELL, MagicNumber, baseLotsize);
+         double sl = (pipSL == 0) ? 0 : (higPriceSell + (pipSL * 10 * MarketInfo(Symbol(), MODE_POINT)));
+         double sellAllTP = (BE_Sell - pipTP*10*MarketInfo(Symbol(), MODE_POINT));
+         modifyTP (Symbol(), OP_SELL, sellAllTP, sl);
+         if (oldTotal != -1 && newTotal != -1) {
+            Print("[Self-Healing] Detected Sell Position Count Change: ", oldTotal, " -> ", newTotal, ". Re-modified TP to: ", sellAllTP);
+         }
+      }
+   }
+}
 
 double breakeven(string symBE, int bTyp, int mNumber, double addLot)
 {
@@ -485,6 +512,21 @@ void GetHigh_LowPrice()
    // Tinh lotsize theo balance
    CalculateLotsizeBasedOnBalance();
    
+   // Self-Healing Double-Insurance TP Modification
+   if (lastTotalOrdBuy == -1)  lastTotalOrdBuy = totalOrdBuy;
+   if (lastTotalOrdSell == -1) lastTotalOrdSell = totalOrdSell;
+   
+   if (totalOrdBuy != lastTotalOrdBuy)
+    {
+       UpdateBasketTP(ORDER_TYPE_BUY, lastTotalOrdBuy, totalOrdBuy);
+       lastTotalOrdBuy = totalOrdBuy;
+    }
+   
+   if (totalOrdSell != lastTotalOrdSell)
+    {
+       UpdateBasketTP(ORDER_TYPE_SELL, lastTotalOrdSell, totalOrdSell);
+       lastTotalOrdSell = totalOrdSell;
+    }
 } // End void GetHigh_LowPrice()
 //+------------------------------------------------------------------+
 
@@ -575,9 +617,6 @@ int BuyPressed (const long chartID, const string action)
    if (totalOrdBuy == 0)
    {
       openOrd (ORDER_TYPE_BUY, price, sl, tp, cm, 1, baseLotsize);
-      
-      Sleep(delayTime*1000);
-      
    }
    
    return (0);
@@ -600,9 +639,6 @@ int SellPressed (const long chartID, const string action)
    if (totalOrdSell == 0)
    {
       openOrd (ORDER_TYPE_SELL, price, sl, tp, cm, 1, baseLotsize);
-      
-      Sleep(delayTime*1000);
-      
    }
    
    return (0);
@@ -707,6 +743,7 @@ int closeNegativeOrders ()
       ArrayResize(tickets, count + 1);
       ArrayResize(lots,    count + 1);
       ArrayResize(types,   count + 1);
+      ArrayResize(profits, count + 1);
       tickets[count] = OrderTicket();
       lots[count]    = OrderLots();
       types[count]   = OrderType();
@@ -812,6 +849,7 @@ int closePositiveOrders ()
       ArrayResize(tickets, count + 1);
       ArrayResize(lots,    count + 1);
       ArrayResize(types,   count + 1);
+      ArrayResize(profits, count + 1);
       tickets[count] = OrderTicket();
       lots[count]    = OrderLots();
       types[count]   = OrderType();
