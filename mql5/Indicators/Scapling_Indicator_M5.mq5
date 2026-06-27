@@ -5,7 +5,7 @@
 #property copyright "XAUUSD PA Scalping Indicator"
 #property version   "1.0"
 #property indicator_chart_window
-#property indicator_buffers 9
+#property indicator_buffers 15
 #property indicator_plots   3
 
 // Plot 1 — ATR Trailing Stop (đường màu xanh)
@@ -128,6 +128,13 @@ double g_atrSigBuf[];
 double g_lastStructTypeBuf[];
 double g_lastStructCountBuf[];
 double g_atrCountBuf[];
+
+double g_obBullBuf[];
+double g_obBearBuf[];
+double g_stateBuf[];
+double g_chochPendingBuf[];
+double g_biasBuf[];
+double g_currentBOSCountBuf[];
 
 //=================================================================
 // SESSION BOX DRAWING
@@ -909,6 +916,7 @@ double GetLatestActiveOBLevel(int obBias)
 void UpdateInfoTable()
 {
     Comment(""); // Clear standard chart comment
+    return; // Disable drawing of indicator status board
 
     string stateStr;
     switch(g_state)
@@ -1013,6 +1021,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
     double l = rates[0].low;
     double c = rates[0].close;
     datetime t = rates[0].time;
+    datetime confirmTime = t + PeriodSeconds();
     double nLoss = 0;
     bool tfChochBull = false, tfChochBear = false, tfBosBull = false, tfBosBear = false;
     string structStr = "";
@@ -1035,19 +1044,19 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
         g_chochPendingDirection = 1;
         g_chochPendingOBLevel = GetMostRecentOppositeOBLevel(1);
         g_tfTrendBiasConfirmed = false;
+        g_currentBOSCount = 0;
+        g_currentATRCount = 0;
         if(g_chochPendingOBLevel == 0.0)
         {
             g_chochPending = false;
             g_tfTrendBias = BULLISH;
             g_tfTrendBiasConfirmed = true;
-            g_currentBOSCount = 0;
-            g_currentATRCount = 0;
             g_lastStructureType = 1; // CHOCH
             g_lastStructureDirection = 1; // Bullish
             g_lastStructureCount = 0;
             isChoch = true;
             if(printLog)
-                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bullish XIN (Immediate) confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bullish XIN (Immediate) confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
             if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                 ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_GREEN);
             if(g_pendingChochTextObj != "" && ObjectFind(0, g_pendingChochTextObj) >= 0)
@@ -1062,19 +1071,19 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
         g_chochPendingDirection = -1;
         g_chochPendingOBLevel = GetMostRecentOppositeOBLevel(-1);
         g_tfTrendBiasConfirmed = false;
+        g_currentBOSCount = 0;
+        g_currentATRCount = 0;
         if(g_chochPendingOBLevel == 0.0)
         {
             g_chochPending = false;
             g_tfTrendBias = BEARISH;
             g_tfTrendBiasConfirmed = true;
-            g_currentBOSCount = 0;
-            g_currentATRCount = 0;
             g_lastStructureType = 1; // CHOCH
             g_lastStructureDirection = -1; // Bearish
             g_lastStructureCount = 0;
             isChoch = true;
             if(printLog)
-                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bearish XIN (Immediate) confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bearish XIN (Immediate) confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
             if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                 ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_RED);
             if(g_pendingChochTextObj != "" && ObjectFind(0, g_pendingChochTextObj) >= 0)
@@ -1100,7 +1109,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 g_lastStructureCount = 0;
                 isChoch = true;
                 if(printLog)
-                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bullish XIN confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bullish XIN confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
 
                 if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_GREEN);
@@ -1124,7 +1133,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 g_lastStructureCount = 0;
                 isChoch = true;
                 if(printLog)
-                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bearish XIN confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bearish XIN confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
 
                 if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_RED);
@@ -1151,7 +1160,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 isChoch = true;
                 
                 if(printLog)
-                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BULLISH confirmed by breaking OB at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BULLISH confirmed by breaking OB at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
                 
                 if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_GREEN);
@@ -1174,7 +1183,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 isChoch = true;
                 
                 if(printLog)
-                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BEARISH confirmed by breaking OB at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BEARISH confirmed by breaking OB at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
                 
                 if(g_pendingChochLineObj != "" && ObjectFind(0, g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_RED);
@@ -1196,7 +1205,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
         g_lastStructureCount = g_currentBOSCount;
         isBos = true;
         if(printLog)
-            Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] BOS Bullish #", g_currentBOSCount, " confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+            Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] BOS Bullish #", g_currentBOSCount, " confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
     }
     else if(tfBosBear)
     {
@@ -1208,7 +1217,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
         g_lastStructureCount = g_currentBOSCount;
         isBos = true;
         if(printLog)
-            Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] BOS Bearish #", g_currentBOSCount, " confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+            Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] BOS Bearish #", g_currentBOSCount, " confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
     }
 
     // 2. Process ATR signals (must check against structure bias)
@@ -1220,7 +1229,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             isAtr = true;
             structStr = (g_lastStructureType == 1) ? "CHOCH Bullish" : ("BOS Bullish #" + IntegerToString(g_lastStructureCount));
             if(printLog)
-                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] ATR Bullish #", g_currentATRCount, " of ", structStr, " confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] ATR Bullish #", g_currentATRCount, " of ", structStr, " confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
         }
     }
     else if(g_tfTrendBias == BEARISH && g_atrSell)
@@ -1231,7 +1240,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             isAtr = true;
             structStr = (g_lastStructureType == 1) ? "CHOCH Bearish" : ("BOS Bearish #" + IntegerToString(g_lastStructureCount));
             if(printLog)
-                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] ATR Bearish #", g_currentATRCount, " of ", structStr, " confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] ATR Bearish #", g_currentATRCount, " of ", structStr, " confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
         }
     }
 
@@ -1267,6 +1276,12 @@ int OnInit()
     SetIndexBuffer(6, g_lastStructTypeBuf, INDICATOR_CALCULATIONS);
     SetIndexBuffer(7, g_lastStructCountBuf, INDICATOR_CALCULATIONS);
     SetIndexBuffer(8, g_atrCountBuf, INDICATOR_CALCULATIONS);
+    SetIndexBuffer(9, g_obBullBuf, INDICATOR_CALCULATIONS);
+    SetIndexBuffer(10, g_obBearBuf, INDICATOR_CALCULATIONS);
+    SetIndexBuffer(11, g_stateBuf, INDICATOR_CALCULATIONS);
+    SetIndexBuffer(12, g_chochPendingBuf, INDICATOR_CALCULATIONS);
+    SetIndexBuffer(13, g_biasBuf, INDICATOR_CALCULATIONS);
+    SetIndexBuffer(14, g_currentBOSCountBuf, INDICATOR_CALCULATIONS);
 
     PlotIndexSetDouble(0, PLOT_EMPTY_VALUE, 0.0);
     PlotIndexSetDouble(1, PLOT_EMPTY_VALUE, 0.0);
@@ -1380,6 +1395,12 @@ int OnCalculate(const int      rates_total,
     ArraySetAsSeries(g_lastStructTypeBuf,  false);
     ArraySetAsSeries(g_lastStructCountBuf, false);
     ArraySetAsSeries(g_atrCountBuf,  false);
+    ArraySetAsSeries(g_obBullBuf,   false);
+    ArraySetAsSeries(g_obBearBuf,   false);
+    ArraySetAsSeries(g_stateBuf,    false);
+    ArraySetAsSeries(g_chochPendingBuf, false);
+    ArraySetAsSeries(g_biasBuf,     false);
+    ArraySetAsSeries(g_currentBOSCountBuf, false);
 
     if(prevCalculated == 0)
     {
@@ -1420,6 +1441,12 @@ int OnCalculate(const int      rates_total,
         ArrayInitialize(g_lastStructTypeBuf, 0.0);
         ArrayInitialize(g_lastStructCountBuf, 0.0);
         ArrayInitialize(g_atrCountBuf, 0.0);
+        ArrayInitialize(g_obBullBuf,   0.0);
+        ArrayInitialize(g_obBearBuf,   0.0);
+        ArrayInitialize(g_stateBuf,    0.0);
+        ArrayInitialize(g_chochPendingBuf, 0.0);
+        ArrayInitialize(g_biasBuf,     0.0);
+        ArrayInitialize(g_currentBOSCountBuf, 0.0);
         
         ArrayInitialize(g_parsedHighs, 0.0);
         ArrayInitialize(g_parsedLows,  0.0);
@@ -1547,6 +1574,15 @@ int OnCalculate(const int      rates_total,
         g_lastStructTypeBuf[i]   = (double)g_lastStructureType;
         g_lastStructCountBuf[i]  = !g_tfTrendBiasConfirmed ? 99.0 : (double)g_lastStructureCount;
         g_atrCountBuf[i]         = (double)g_currentATRCount;
+
+        double obBullVal = GetLatestActiveOBLevel(BULLISH);
+        double obBearVal = GetLatestActiveOBLevel(BEARISH);
+        g_obBullBuf[i]           = obBullVal;
+        g_obBearBuf[i]           = obBearVal;
+        g_stateBuf[i]            = (double)g_state;
+        g_chochPendingBuf[i]     = g_chochPending ? g_chochPendingOBLevel : 0.0;
+        g_biasBuf[i]             = (double)g_bias;
+        g_currentBOSCountBuf[i]  = (double)g_currentBOSCount;
 
         g_currentBOSCountHistory[i] = g_currentBOSCount;
         g_chochPendingHistory[i] = g_chochPending;

@@ -1,5 +1,5 @@
 //+------------------------------------------------------------------+
-//|                                                       Farmer.mq4 |
+//|                                                       BigDickSignal.mq4 |
 //|                                                    Trung đẹp zai |
 //|                                             https://www.mql5.com |
 //+------------------------------------------------------------------+
@@ -87,7 +87,7 @@ color Font_Color = clrWhite;
 int Font_Size = 10;
 // ---- Button
 
-string cmt = "BigDick - DCA: ";
+string cmt = "BigDickSignal - DCA: ";
 
 bool openOrder = true;
 double p0w, currentLots;
@@ -118,6 +118,8 @@ int dig;
 int normalLotUnit = 2;
 
 datetime trial_end_date = D'10.12.2024';
+
+datetime g_lastM1BarTime = 0;
 
 int OnInit()
   {
@@ -152,6 +154,13 @@ void OnTick()
    GetHigh_LowPrice();
    doAction();
    showInfo();
+   
+   datetime currentBarTime = iTime(Symbol(), PERIOD_M1, 0);
+   if(currentBarTime != g_lastM1BarTime)
+   {
+      showCombinedStatusBoard();
+      g_lastM1BarTime = currentBarTime;
+   }
 }
 //+------------------------------------------------------------------+
 
@@ -222,7 +231,7 @@ datetime GetM5LastChochTime(int direction)
       double m5_choch = GetM5IndicatorValue(3, i);
       if(m5_choch == (double)direction) 
       {
-         return iTime(Symbol(), PERIOD_M5, i);
+         return iTime(Symbol(), PERIOD_M5, i) + 300;
       }
    }
    return 0;
@@ -918,7 +927,7 @@ void showInfo()
    }
    
    RectLabelCreate(0,"BG", 0, x - 10, 20, 300, 250, clrMidnightBlue, BORDER_RAISED, CORNER_LEFT_UPPER, clrMidnightBlue, STYLE_SOLID, 2, false, false, true, 0);
-   Draw("Bot_Name", "============ Farmer EA ============", 12, "Calibri Bold", clrYellow, 4, x, 20);
+   Draw("Bot_Name", "============ BigDickSignal EA ============", 12, "Calibri Bold", clrYellow, 4, x, 20);
       
    Draw("Balance", "Balance: " + FormatNumber(NormalizeDouble(accountBalance, 2), " "), 12, "Calibri Bold", clrYellow, 4, x, 160);
    Draw("Enquity", "Enquity: " + FormatNumber(NormalizeDouble(accountEnquity, 2), " "), 12, "Calibri Bold", clrYellow, 4, x, 180);
@@ -946,6 +955,118 @@ void showInfo()
    Draw("ServerTime", "TZ Diff From GMT7: -" + diffServerGMT7Offset, 12, "Calibri Bold", clrYellow, 4, x, 240);
    //Draw("Expired", "Expire date: " + trial_end_date, 12, "Calibri Bold", clrYellow, 4, x, 230);
    
+}
+
+void showCombinedStatusBoard()
+{
+   double m1_ob_bull         = GetM1IndicatorValue(9, 1);
+   double m1_ob_bear         = GetM1IndicatorValue(10, 1);
+   double m1_state           = GetM1IndicatorValue(11, 1);
+   double m1_pending_ob      = GetM1IndicatorValue(12, 1);
+   double m1_bias            = GetM1IndicatorValue(13, 1);
+   double m1_bos_count       = GetM1IndicatorValue(14, 1);
+   double m1_atr_count       = GetM1IndicatorValue(8, 1);
+
+   double m5_ob_bull         = GetM5IndicatorValue(9, 1);
+   double m5_ob_bear         = GetM5IndicatorValue(10, 1);
+   double m5_state           = GetM5IndicatorValue(11, 1);
+   double m5_pending_ob      = GetM5IndicatorValue(12, 1);
+   double m5_bias            = GetM5IndicatorValue(13, 1);
+   double m5_bos_count       = GetM5IndicatorValue(14, 1);
+   double m5_atr_count       = GetM5IndicatorValue(8, 1);
+
+   ENUM_BASE_CORNER corner = CORNER_LEFT_LOWER;
+   int xStart = 20;
+   int yStart = 20;
+   
+   // Background
+   RectLabelCreate(0, "Combined_Status_BG", 0, xStart - 10, yStart + 160, 540, 160, clrMidnightBlue, BORDER_SUNKEN, corner, clrMidnightBlue, STYLE_SOLID, 2, false, false, true, 0);
+
+   int y = yStart + 135;
+   // Header Row
+   Draw("H_Metric", "METRIC", 9, "Calibri Bold", clrYellow, corner, xStart, y);
+   Draw("H_M1", "M1 TIMEFRAME", 9, "Calibri Bold", clrYellow, corner, xStart + 120, y);
+   Draw("H_M5", "M5 TIMEFRAME", 9, "Calibri Bold", clrYellow, corner, xStart + 330, y);
+
+   // Row 1: Bias
+   y -= 17;
+   Draw("R1_Metric", "Trend Bias", 9, "Calibri Bold", clrWhite, corner, xStart, y);
+   
+   string m1_bias_str = m1_bias == 1.0 ? "BULLISH" : (m1_bias == -1.0 ? "BEARISH" : "--");
+   color m1_bias_color = m1_bias == 1.0 ? clrLime : (m1_bias == -1.0 ? clrRed : clrYellow);
+   Draw("R1_M1", m1_bias_str, 9, "Calibri Bold", m1_bias_color, corner, xStart + 120, y);
+
+   string m5_bias_str = m5_bias == 1.0 ? "BULLISH" : (m5_bias == -1.0 ? "BEARISH" : "--");
+   color m5_bias_color = m5_bias == 1.0 ? clrLime : (m5_bias == -1.0 ? clrRed : clrYellow);
+   Draw("R1_M5", m5_bias_str, 9, "Calibri Bold", m5_bias_color, corner, xStart + 330, y);
+
+   // Row 2: Status
+   y -= 17;
+   Draw("R2_Metric", "Status", 9, "Calibri Bold", clrWhite, corner, xStart, y);
+
+   string m1_status_str = "Entry Allowed (BOS <= 1)";
+   color m1_status_color = clrLime;
+   if(m1_pending_ob > 0.0) { m1_status_str = "No Entry (CHOCH Pending)"; m1_status_color = clrRed; }
+   else if(m1_bos_count >= 2.0) { m1_status_str = "No Entry (BOS >= 2)"; m1_status_color = clrRed; }
+   Draw("R2_M1", m1_status_str, 9, "Calibri Bold", m1_status_color, corner, xStart + 120, y);
+
+   string m5_status_str = "Entry Allowed";
+   color m5_status_color = clrLime;
+   if(m5_pending_ob > 0.0) { m5_status_str = "No Entry (CHOCH Pending)"; m5_status_color = clrRed; }
+   else if(m5_bos_count >= 3.0) { m5_status_str = "No Entry (BOS >= 3)"; m5_status_color = clrRed; }
+   Draw("R2_M5", m5_status_str, 9, "Calibri Bold", m5_status_color, corner, xStart + 330, y);
+
+   // Row 3: State / Wait
+   y -= 17;
+   Draw("R3_Metric", "State / Wait", 9, "Calibri Bold", clrWhite, corner, xStart, y);
+
+   string m1_state_str = "--";
+   if(m1_pending_ob > 0.0) m1_state_str = "Cho TF pha ob - " + DoubleToString(m1_pending_ob, 2);
+   else if(m1_state == 0) m1_state_str = "Cho TF choch cung chieu HTF";
+   else if(m1_state == 1) m1_state_str = "Cho TF sweep ob";
+   else if(m1_state == 2) m1_state_str = "Cho ATR confirm";
+   else if(m1_state == 3) m1_state_str = (m1_bos_count > 1) ? "Cho dao choch" : "In Trend";
+   Draw("R3_M1", m1_state_str, 9, "Calibri Bold", clrWhite, corner, xStart + 120, y);
+
+   string m5_state_str = "--";
+   if(m5_pending_ob > 0.0) m5_state_str = "Cho TF pha ob - " + DoubleToString(m5_pending_ob, 2);
+   else if(m5_state == 0) m5_state_str = "Wait TF CHoCH";
+   else if(m5_state == 1) m5_state_str = "Cho TF sweep ob";
+   else if(m5_state == 2) m5_state_str = "Cho ATR confirm";
+   else if(m5_state == 3) m5_state_str = (m5_bos_count > 2) ? "Cho dao choch" : "Cho setup LTF";
+   Draw("R3_M5", m5_state_str, 9, "Calibri Bold", clrWhite, corner, xStart + 330, y);
+
+   // Row 4: TF OB Bull
+   y -= 17;
+   Draw("R4_Metric", "TF OB Bull", 9, "Calibri Bold", clrWhite, corner, xStart, y);
+   string m1_ob_bull_str = m1_ob_bull > 0.0 ? DoubleToString(m1_ob_bull, 2) : "--";
+   color m1_ob_bull_clr = m1_ob_bull > 0.0 ? clrLime : clrYellow;
+   Draw("R4_M1", m1_ob_bull_str, 9, "Calibri Bold", m1_ob_bull_clr, corner, xStart + 120, y);
+   string m5_ob_bull_str = m5_ob_bull > 0.0 ? DoubleToString(m5_ob_bull, 2) : "--";
+   color m5_ob_bull_clr = m5_ob_bull > 0.0 ? clrLime : clrYellow;
+   Draw("R4_M5", m5_ob_bull_str, 9, "Calibri Bold", m5_ob_bull_clr, corner, xStart + 330, y);
+
+   // Row 5: TF OB Bear
+   y -= 17;
+   Draw("R5_Metric", "TF OB Bear", 9, "Calibri Bold", clrWhite, corner, xStart, y);
+   string m1_ob_bear_str = m1_ob_bear > 0.0 ? DoubleToString(m1_ob_bear, 2) : "--";
+   color m1_ob_bear_clr = m1_ob_bear > 0.0 ? clrRed : clrYellow;
+   Draw("R5_M1", m1_ob_bear_str, 9, "Calibri Bold", m1_ob_bear_clr, corner, xStart + 120, y);
+   string m5_ob_bear_str = m5_ob_bear > 0.0 ? DoubleToString(m5_ob_bear, 2) : "--";
+   color m5_ob_bear_clr = m5_ob_bear > 0.0 ? clrRed : clrYellow;
+   Draw("R5_M5", m5_ob_bear_str, 9, "Calibri Bold", m5_ob_bear_clr, corner, xStart + 330, y);
+
+   // Row 6: TF BOS
+   y -= 17;
+   Draw("R6_Metric", "TF BOS", 9, "Calibri Bold", clrWhite, corner, xStart, y);
+   Draw("R6_M1", IntegerToString((int)m1_bos_count), 9, "Calibri Bold", clrWhite, corner, xStart + 120, y);
+   Draw("R6_M5", IntegerToString((int)m5_bos_count), 9, "Calibri Bold", clrWhite, corner, xStart + 330, y);
+
+   // Row 7: Current ATR
+   y -= 17;
+   Draw("R7_Metric", "Current ATR Count", 9, "Calibri Bold", clrWhite, corner, xStart, y);
+   Draw("R7_M1", IntegerToString((int)m1_atr_count), 9, "Calibri Bold", clrWhite, corner, xStart + 120, y);
+   Draw("R7_M5", IntegerToString((int)m5_atr_count), 9, "Calibri Bold", clrWhite, corner, xStart + 330, y);
 }
 
 void OnChartEvent (const int id, const long &lparam, const double &dparam, const string &action)
@@ -1827,4 +1948,4 @@ string FormatNumber(string numb, string delim=",",string dec=".")
       }
    forma=StringConcatenate(forma,enumb); 
    return(forma);
-}     
+}

@@ -5,31 +5,24 @@
 #property copyright "XAUUSD PA Scalping Indicator"
 #property version   "1.0"
 #property indicator_chart_window
-#property indicator_buffers 9
-
+#property indicator_buffers 15
 // Plot 1 — ATR Trailing Stop (đường màu xanh)
 #property indicator_color1  clrDodgerBlue
 #property indicator_width1  1
 #property indicator_style1  STYLE_SOLID
-
 // Plot 2 — ATR Buy confirm (mũi tên lên)
 #property indicator_color2  C'8,153,129'
-
 // Plot 3 — ATR Sell confirm (mũi tên xuống)
 #property indicator_color3  C'242,54,69'
-
 //=================================================================
 // INPUTS
 //=================================================================
 input int             InpSwingLen    = 5;          // Swing Length (TF hiện tại)
-
 input bool            InpOBMitigClose   = true;    // OB Mitigation = Close (false = High/Low)
 input int             InpObCount        = 5;       // Số OB TF hiện tại hiển thị
-
 input double          InpAtrKey    = 1.0;          // ATR Key Value
 input int             InpAtrPeriod = 10;           // ATR Period
 input bool            InpUseHA     = false;         // Dùng Heikin Ashi
-
 input bool            InpEnableTimeFilter = true;  // Bật lọc khung giờ
 input string          InpTZ  = "UTC+7";            // Timezone
 input bool            InpEnS1 = true;              // London
@@ -40,12 +33,10 @@ input bool            InpEnS3 = true;              // Phiên Á
 input string          InpS3   = "0730-0900";       // Phiên Á session
 input bool            InpEnS4 = true;              // Tùy chỉnh
 input string          InpS4   = "1030-1315";       // Tùy chỉnh session
-
 input bool  InpShowTFStruct   = true;   // Hiện CHoCH/BOS TF hiện tại
 input bool  InpShowTFOBs      = true;   // Hiện OB TF hiện tại
 input bool  InpShowATRSignal  = true;  // Hiện ATR Confirm signals
 input bool  InpShowSessionBox = false;   // Vẽ box phiên
-
 //=================================================================
 // CONSTANTS + COLORS
 //=================================================================
@@ -56,7 +47,6 @@ input bool  InpShowSessionBox = false;   // Vẽ box phiên
 #define MAX_OB      100
 #define MAX_PARSED  10000
 #define OBJ_PFX     "XAUIPA_"
-
 #define C_GREEN      ((color)0x819908)   // #089981 R=8 G=153 B=129
 #define C_RED        ((color)0x4536F2)   // #F23645 R=242 G=54 B=69
 #define C_COBALT     C'0,71,171'
@@ -69,7 +59,6 @@ input bool  InpShowSessionBox = false;   // Vẽ box phiên
 #define C_SESS2      ((color)0x0098FF)   // #FF9800
 #define C_SESS3      ((color)0x50AF4C)   // #4CAF50
 #define C_SESS4      ((color)0xB0279C)   // #9C27B0
-
 //=================================================================
 // STRUCTS
 //=================================================================
@@ -81,7 +70,6 @@ struct SPivot
     datetime barTime;
     int      barIndex;
 };
-
 struct SOrderBlock
 {
     double   barHigh;
@@ -91,14 +79,12 @@ struct SOrderBlock
     bool     active;
     string   boxName;
 };
-
 //=================================================================
 // INDICATOR BUFFERS
 //=================================================================
 double g_atrStopBuf[];
 double g_atrBuyBuf[];
 double g_atrSellBuf[];
-
 // EA Signal Buffers
 double g_chochBuf[];
 double g_bosBuf[];
@@ -106,13 +92,17 @@ double g_atrSigBuf[];
 double g_lastStructTypeBuf[];
 double g_lastStructCountBuf[];
 double g_atrCountBuf[];
-
+double g_obBullBuf[];
+double g_obBearBuf[];
+double g_stateBuf[];
+double g_chochPendingBuf[];
+double g_biasBuf[];
+double g_currentBOSCountBuf[];
 //=================================================================
 // SESSION BOX DRAWING
 //=================================================================
 string g_sessNames[4] = {"London","New York","Phien A","Tuy chinh"};
 color  g_sessColors[4] = {C_SESS1, C_SESS2, C_SESS3, C_SESS4};
-
 //=================================================================
 // GLOBAL STATE
 //=================================================================
@@ -124,7 +114,6 @@ double g_chochPendingOBLevel = 0.0;
 bool   g_tfTrendBiasConfirmed = false;
 string g_pendingChochLineObj = "";
 string g_pendingChochTextObj = "";
-
 bool   g_bosSeen        = false;
 int    g_tfBosCount     = 0;
 bool   g_tfBosLimitHit  = false;
@@ -133,18 +122,15 @@ double g_tfSweepBullLevel = 0;
 double g_tfSweepBearLevel = 0;
 double g_cycleSL          = 0;
 double g_cycleSL_choch    = 0;
-
 // TF structure
 SPivot g_tfHigh;
 SPivot g_tfLow;
 int    g_tfTrendBias = 0;
 int    g_tfLegState  = BEARISH_LEG;
-
 bool   g_tf_chochBull = false;
 bool   g_tf_chochBear = false;
 bool   g_tf_bosBull   = false;
 bool   g_tf_bosBear   = false;
-
 // ATR state
 double g_xATRStop  = 0;
 double g_srcPrice  = 0;
@@ -153,42 +139,35 @@ double g_haOpen    = 0;
 double g_haClose   = 0;
 bool   g_atrBuy    = false;
 bool   g_atrSell   = false;
-
 // parsedHighs/parsedLows (Luxalgo HVB adjusted)
 double   g_parsedHighs[];
 double   g_parsedLows[];
 datetime g_obTimes[];
 double   g_actualHighs[];
 double   g_actualLows[];
-
 // TF OBs
 SOrderBlock g_tfOBs[MAX_OB];
 int         g_tfOBCount = 0;
-
 // Bar tracking
 bool     g_initialized      = false;
 int      g_objCounter       = 0;
-
 // Session tracking
 bool     g_sessWas[4]    = {false,false,false,false};
 double   g_sessH[4]      = {0,0,0,0};
 double   g_sessL[4]      = {0,0,0,0};
 string   g_sessBoxName[4]= {"","","",""};
 string   g_sessLblName[4]= {"","","",""};
-
 // EA Signal state tracking
 int      g_currentBOSCount = 0;
 int      g_currentATRCount = 0;
 int      g_lastStructureType = 0; // 0=None, 1=CHOCH, 2=BOS
 int      g_lastStructureDirection = 0; // 1=Bullish, -1=Bearish
 int      g_lastStructureCount = 0;
-
 struct SOBArray
 {
     SOrderBlock ob[100];
     int count;
 };
-
 SOBArray g_tfOBsHistory[];
 int    g_currentBOSCountHistory[];
 bool   g_chochPendingHistory[];
@@ -216,7 +195,6 @@ double g_tfSweepBearLevelHistory[];
 double g_cycleSLHistory[];
 double g_cycleSL_chochHistory[];
 bool   g_tfTrendBiasConfirmedHistory[];
-
 //=================================================================
 // OBJECT HELPERS
 //=================================================================
@@ -225,13 +203,11 @@ string NewObjName(string tag)
     g_objCounter++;
     return OBJ_PFX + tag + "_" + IntegerToString(g_objCounter);
 }
-
 void DelObj(string name)
 {
     if(name != "" && ObjectFind(name) >= 0)
         ObjectDelete(name);
 }
-
 void CreateLine(string name, datetime t1, double p1, datetime t2, double p2,
                 color col, int style, int width, bool rayRight=false)
 {
@@ -244,7 +220,6 @@ void CreateLine(string name, datetime t1, double p1, datetime t2, double p2,
     ObjectSetInteger(0, name, OBJPROP_SELECTABLE,false);
     ObjectSetInteger(0, name, OBJPROP_HIDDEN,    true);
 }
-
 void CreateText(string name, datetime t, double price, string txt,
                 color col, int fontSize, int anchor=ANCHOR_LOWER)
 {
@@ -257,7 +232,6 @@ void CreateText(string name, datetime t, double price, string txt,
     ObjectSetInteger(0, name, OBJPROP_SELECTABLE,false);
     ObjectSetInteger(0, name, OBJPROP_HIDDEN,    true);
 }
-
 void CreateBox(string name, datetime t1, double top, datetime t2, double bot,
                color bgCol, color borderCol, int borderWidth=1)
 {
@@ -271,31 +245,26 @@ void CreateBox(string name, datetime t1, double top, datetime t2, double bot,
     ObjectSetInteger(0, name, OBJPROP_SELECTABLE,false);
     ObjectSetInteger(0, name, OBJPROP_HIDDEN,    true);
 }
-
 void BoxSetRight(string name, datetime t2)
 {
     if(name != "" && ObjectFind(name) >= 0)
         ObjectSetInteger(0, name, OBJPROP_TIME, 1, t2);
 }
-
 void BoxSetTop(string name, double top)
 {
     if(name != "" && ObjectFind(name) >= 0)
         ObjectSetDouble(0, name, OBJPROP_PRICE, 0, top);
 }
-
 void BoxSetBottom(string name, double bot)
 {
     if(name != "" && ObjectFind(name) >= 0)
         ObjectSetDouble(0, name, OBJPROP_PRICE, 1, bot);
 }
-
 void BoxSetBgColor(string name, color col)
 {
     if(name != "" && ObjectFind(name) >= 0)
         ObjectSetInteger(0, name, OBJPROP_BGCOLOR, col);
 }
-
 void TextSetXY(string name, datetime t, double price)
 {
     if(name != "" && ObjectFind(name) >= 0)
@@ -304,24 +273,20 @@ void TextSetXY(string name, datetime t, double price)
         ObjectSetDouble( 0, name, OBJPROP_PRICE, 0, price);
     }
 }
-
 void TextSetText(string name, string txt)
 {
     if(name != "" && ObjectFind(name) >= 0)
         ObjectSetString(0, name, OBJPROP_TEXT, txt);
 }
-
 void LineSetX2(string name, datetime t2)
 {
     if(name != "" && ObjectFind(name) >= 0)
         ObjectSetInteger(0, name, OBJPROP_TIME, 1, t2);
 }
-
 void DeleteAllObjects()
 {
     ObjectsDeleteAll(0, OBJ_PFX);
 }
-
 //=================================================================
 // MATH HELPERS
 //=================================================================
@@ -334,7 +299,6 @@ double RatesHighest(const MqlRates &rates[], int fromIdx, int count)
         if(rates[i].high > h) h = rates[i].high;
     return h;
 }
-
 double RatesLowest(const MqlRates &rates[], int fromIdx, int count)
 {
     int i = 0;
@@ -344,7 +308,6 @@ double RatesLowest(const MqlRates &rates[], int fromIdx, int count)
         if(rates[i].low < l) l = rates[i].low;
     return l;
 }
-
 //=================================================================
 // SESSION HELPER
 //=================================================================
@@ -382,20 +345,17 @@ int GetUTCOffsetSec(string tz)
     }
     return 0;
 }
-
 bool InSessionAt(datetime barTime, bool en, string sess)
 {
     if(!en) return false;
     int dashPos = StringFind(sess, "-");
     if(dashPos < 0) return false;
-
     string startStr = StringSubstr(sess, 0, dashPos);
     string endStr   = StringSubstr(sess, dashPos + 1);
     int startH = (int)StringToInteger(StringSubstr(startStr, 0, 2));
     int startM = (int)StringToInteger(StringSubstr(startStr, 2, 2));
     int endH   = (int)StringToInteger(StringSubstr(endStr, 0, 2));
     int endM   = (int)StringToInteger(StringSubstr(endStr, 2, 2));
-
     int utcOff = GetUTCOffsetSec(InpTZ);
     datetime localTime = barTime + utcOff;
     MqlDateTime dt;
@@ -403,13 +363,11 @@ bool InSessionAt(datetime barTime, bool en, string sess)
     int nowMin   = dt.hour * 60 + dt.min;
     int startMin = startH * 60 + startM;
     int endMin   = endH   * 60 + endM;
-
     if(startMin <= endMin)
         return (nowMin >= startMin && nowMin < endMin);
     else
         return (nowMin >= startMin || nowMin < endMin);
 }
-
 bool SessionOKAt(datetime barTime)
 {
     if(!InpEnableTimeFilter) return true;
@@ -418,21 +376,17 @@ bool SessionOKAt(datetime barTime)
            InSessionAt(barTime, InpEnS3, InpS3) ||
            InSessionAt(barTime, InpEnS4, InpS4);
 }
-
 void UpdateSessionBoxes(datetime barTime, double barHigh, double barLow,
                          int periodSec)
 {
     if(!InpShowSessionBox) return;
-
     bool sessNow[4];
     sessNow[0] = InSessionAt(barTime, InpEnS1, InpS1);
     sessNow[1] = InSessionAt(barTime, InpEnS2, InpS2);
     sessNow[2] = InSessionAt(barTime, InpEnS3, InpS3);
     sessNow[3] = InSessionAt(barTime, InpEnS4, InpS4);
-
     datetime extRight = barTime + (datetime)(periodSec * 21);
     int s = 0;
-
     for(s = 0; s < 4; s++)
     {
         if(sessNow[s] && !g_sessWas[s])
@@ -441,7 +395,6 @@ void UpdateSessionBoxes(datetime barTime, double barHigh, double barLow,
             g_sessL[s] = barLow;
             g_sessBoxName[s] = NewObjName("SESS" + IntegerToString(s));
             g_sessLblName[s] = NewObjName("SESSL" + IntegerToString(s));
-
             color col   = g_sessColors[s];
             color bgcol;
             switch(s)
@@ -470,7 +423,6 @@ void UpdateSessionBoxes(datetime barTime, double barHigh, double barLow,
         g_sessWas[s] = sessNow[s];
     }
 }
-
 //=================================================================
 // STRUCTURE DRAWING
 //=================================================================
@@ -478,28 +430,21 @@ void DrawStructure(SPivot &pivot, string tag, color col, int lineStyle,
                    int fontSize, datetime curTime, bool isChoch = false)
 {
     if(pivot.currentLevel <= 0) return;
-
     string lnName  = NewObjName("STR");
     string txtName = NewObjName("STRT");
-
     CreateLine(lnName, pivot.barTime, pivot.currentLevel,
                curTime, pivot.currentLevel, col, lineStyle, 1, false);
-
     datetime midTime = pivot.barTime + (curTime - pivot.barTime) / 2;
     CreateText(txtName, midTime, pivot.currentLevel, tag, col, fontSize, ANCHOR_LOWER);
-
     if(isChoch)
     {
         g_pendingChochLineObj = lnName;
         g_pendingChochTextObj = txtName;
     }
 }
-
 //=================================================================
 // SR MANAGEMENT
 //=================================================================
-
-
 //=================================================================
 // GENERAL STATEMACHINE HELPERS
 //=================================================================
@@ -514,12 +459,10 @@ void UpdateParsed(double h, double l, double atr200, datetime t, int barIdx)
     g_actualLows[barIdx]  = l;
     g_obTimes[barIdx]     = t;
 }
-
 void StoreTFOrderBlock(int pivotBarIndex, int obBias, int currentBarIdx)
 {
     int k = 0;
     if(pivotBarIndex < 0 || pivotBarIndex > currentBarIdx) return;
-
     int parsedIdx = -1;
     if(obBias == BEARISH)
     {
@@ -538,11 +481,9 @@ void StoreTFOrderBlock(int pivotBarIndex, int obBias, int currentBarIdx)
         }
     }
     if(parsedIdx < 0) return;
-
     if(g_tfOBCount < MAX_OB) g_tfOBCount++;
     for(k = g_tfOBCount - 1; k > 0; k--)
         g_tfOBs[k] = g_tfOBs[k-1];
-
     g_tfOBs[0].barHigh = g_actualHighs[parsedIdx];
     g_tfOBs[0].barLow  = g_actualLows[parsedIdx];
     g_tfOBs[0].barTime = g_obTimes[parsedIdx];
@@ -550,13 +491,11 @@ void StoreTFOrderBlock(int pivotBarIndex, int obBias, int currentBarIdx)
     g_tfOBs[0].active  = true;
     g_tfOBs[0].boxName = "";
 }
-
 void DeleteMitigatedTFOBs(double curClose, double curHigh, double curLow)
 {
     int i = 0;
     double bearMitig = InpOBMitigClose ? curClose : curHigh;
     double bullMitig = InpOBMitigClose ? curClose : curLow;
-
     for(i = 0; i < g_tfOBCount; i++)
     {
         if(!g_tfOBs[i].active) continue;
@@ -571,20 +510,16 @@ void DeleteMitigatedTFOBs(double curClose, double curHigh, double curLow)
         }
     }
 }
-
 void DrawTFOrderBlocks(datetime rightTime)
 {
     int i = 0;
     if(!InpShowTFOBs) return;
-
     int drawn = 0;
     for(i = 0; i < g_tfOBCount && drawn < InpObCount; i++)
     {
         if(!g_tfOBs[i].active) continue;
-
         color col = g_tfOBs[i].bias == BEARISH
                     ? C_BEAR_OB : C_BULL_OB;
-
         if(g_tfOBs[i].boxName == "")
         {
             g_tfOBs[i].boxName = NewObjName("TFOB");
@@ -600,7 +535,6 @@ void DrawTFOrderBlocks(datetime rightTime)
         drawn++;
     }
 }
-
 //=================================================================
 // STRUCTURE UPDATES
 //=================================================================
@@ -613,12 +547,9 @@ void UpdateTFStructure(const MqlRates &rates[], datetime curTime, bool &chochBul
     color col = clrNONE;
     
     if(total < n + 2) return;
-
     bool legIsHigh = (rates[n].high > RatesHighest(rates, 0, n));
     bool legIsLow  = (rates[n].low  < RatesLowest(rates,  0, n));
-
     int newLeg = legIsHigh ? BEARISH_LEG : (legIsLow ? BULLISH_LEG : g_tfLegState);
-
     if(newLeg != g_tfLegState)
     {
         if(newLeg == BEARISH_LEG)
@@ -639,13 +570,10 @@ void UpdateTFStructure(const MqlRates &rates[], datetime curTime, bool &chochBul
         }
         g_tfLegState = newLeg;
     }
-
     chochBull = false; bosBull = false;
     chochBear = false; bosBear = false;
-
     double curClose  = rates[0].close;
     double prevClose = rates[1].close;
-
     // Bullish break
     if(g_tfHigh.currentLevel > 0 && !g_tfHigh.crossed)
     {
@@ -663,20 +591,17 @@ void UpdateTFStructure(const MqlRates &rates[], datetime curTime, bool &chochBul
                 bosBull   = true;
                 g_tfTrendBias = BULLISH;
             }
-
             if(InpShowTFStruct)
             {
                 tag = chochBull ? "5CHoCH" : "5BOS";
                 col = chochBull ? C_COBALT : C_GREEN;
                 DrawStructure(g_tfHigh, tag, col, STYLE_DASH, 7, curTime, chochBull);
             }
-
             StoreTFOrderBlock(g_tfLow.barIndex, BULLISH, barIdx);
             if(g_tfOBCount > 0 && g_tfOBs[0].bias == BULLISH)
                 g_tfSweepBearLevel = g_tfOBs[0].barLow;
         }
     }
-
     // Bearish break
     if(g_tfLow.currentLevel > 0 && !g_tfLow.crossed)
     {
@@ -694,21 +619,18 @@ void UpdateTFStructure(const MqlRates &rates[], datetime curTime, bool &chochBul
                 bosBear   = true;
                 g_tfTrendBias = BEARISH;
             }
-
             if(InpShowTFStruct)
             {
                 tag = chochBear ? "5CHoCH" : "5BOS";
                 col = chochBear ? C_YELLOW : C_RED;
                 DrawStructure(g_tfLow, tag, col, STYLE_DASH, 7, curTime, chochBear);
             }
-
             StoreTFOrderBlock(g_tfHigh.barIndex, BEARISH, barIdx);
             if(g_tfOBCount > 0 && g_tfOBs[0].bias == BEARISH)
                 g_tfSweepBullLevel = g_tfOBs[0].barHigh;
         }
     }
 }
-
 void FullReset()
 {
     g_state          = 0;  g_bias = 0;
@@ -717,7 +639,6 @@ void FullReset()
     g_tfBosCount     = 0;  g_tfBosLimitHit = false; g_chochAtrFired = false;
     g_tfSweepBullLevel = 0;  g_tfSweepBearLevel = 0;
 }
-
 //=================================================================
 // ATR CALCULATION
 //=================================================================
@@ -728,10 +649,8 @@ void UpdateATR(double o, double h, double l, double c, double nLoss)
     g_haOpen  = haOpen;
     g_haClose = haClose;
     double src = InpUseHA ? haClose : c;
-
     double prevStop = g_xATRStop;
     double prevSrc  = g_srcPrice1;
-
     if(prevStop == 0)
         g_xATRStop = src - nLoss;
     else if(src > prevStop && prevSrc > prevStop)
@@ -742,7 +661,6 @@ void UpdateATR(double o, double h, double l, double c, double nLoss)
         g_xATRStop = src - nLoss;
     else
         g_xATRStop = src + nLoss;
-
     if(g_initialized)
     {
         g_atrBuy  = (prevSrc <= prevStop) && (src > g_xATRStop);
@@ -753,11 +671,9 @@ void UpdateATR(double o, double h, double l, double c, double nLoss)
         g_atrBuy  = false;
         g_atrSell = false;
     }
-
     g_srcPrice1 = src;
     g_srcPrice  = src;
 }
-
 //=================================================================
 // STATE MACHINE
 //=================================================================
@@ -766,13 +682,10 @@ void RunStateMachine(double curClose, double curHigh, double curLow, double curO
 {
     double bearMitig = InpOBMitigClose ? curClose : curHigh;
     double bullMitig = InpOBMitigClose ? curClose : curLow;
-
     bool tfOBSweepBull = (g_tfSweepBullLevel > 0) && (bearMitig >= g_tfSweepBullLevel);
     bool tfOBSweepBear = (g_tfSweepBearLevel > 0) && (bullMitig <= g_tfSweepBearLevel);
-
     bool reversed = (g_bias == BULLISH && g_tf_chochBear) ||
                     (g_bias == BEARISH && g_tf_chochBull);
-
     if(reversed)
     {
         g_state = 1; 
@@ -783,7 +696,6 @@ void RunStateMachine(double curClose, double curHigh, double curLow, double curO
         g_bosSeen = false;
         return;
     }
-
     if(g_state == 0)
     {
         if(g_tf_chochBull)
@@ -795,9 +707,7 @@ void RunStateMachine(double curClose, double curHigh, double curLow, double curO
             g_state = 1; g_bias = BEARISH; g_tfBosCount = 0; g_tfBosLimitHit = false; g_chochAtrFired = false; g_bosSeen = false;
         }
     }
-
     int stateSnap = g_state;
-
     // State 1: Wait TF OB Sweep
     if(stateSnap == 1)
     {
@@ -810,7 +720,6 @@ void RunStateMachine(double curClose, double curHigh, double curLow, double curO
             g_state = 2; // Move to wait ATR
         }
     }
-
     // State 2: Wait ATR confirm
     if(stateSnap == 2)
     {
@@ -825,7 +734,6 @@ void RunStateMachine(double curClose, double curHigh, double curLow, double curO
             g_chochAtrFired = true;
         }
     }
-
     // State 3: In Trend (Continuation mode)
     if(stateSnap == 3)
     {
@@ -837,7 +745,6 @@ void RunStateMachine(double curClose, double curHigh, double curLow, double curO
         {
             g_bosSeen = true;
         }
-
         if(g_bosSeen)
         {
             if(g_bias == BULLISH && g_atrBuy)
@@ -851,7 +758,6 @@ void RunStateMachine(double curClose, double curHigh, double curLow, double curO
         }
     }
 }
-
 void CreateLabel(string name, int x, int y, string text, color col, int fontSize, int corner = CORNER_LEFT_LOWER)
 {
     if(ObjectFind(name) < 0)
@@ -868,7 +774,6 @@ void CreateLabel(string name, int x, int y, string text, color col, int fontSize
     ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
     ObjectSetInteger(0, name, OBJPROP_HIDDEN,     true);
 }
-
 //=================================================================
 // INFO TABLE
 //=================================================================
@@ -883,11 +788,10 @@ double GetLatestActiveOBLevel(int obBias)
     }
     return 0.0;
 }
-
 void UpdateInfoTable()
 {
     Comment(""); // Clear standard chart comment
-
+    return; // Disable drawing of indicator status board
     string stateStr;
     switch(g_state)
     {
@@ -900,7 +804,6 @@ void UpdateInfoTable()
     string biasStr  = g_bias == BULLISH ? "BULL" : g_bias == BEARISH ? "BEAR" : "--";
     string tfBosStr = g_chochPending ? "0" : IntegerToString(g_currentBOSCount);
     string slStr    = g_cycleSL > 0 ? DoubleToString(NormalizeDouble(g_cycleSL, 2), 2) : "--";
-
     // Get active OB levels
     double obBullVal = GetLatestActiveOBLevel(BULLISH);
     double obBearVal = GetLatestActiveOBLevel(BEARISH);
@@ -908,7 +811,6 @@ void UpdateInfoTable()
     string obBearStr = obBearVal > 0 ? DoubleToString(NormalizeDouble(obBearVal, 2), 2) : "--";
     color obBullColor = obBullVal > 0 ? clrLime : clrYellow;
     color obBearColor = obBearVal > 0 ? clrRed : clrYellow;
-
     string entryPermStr = "Entry Allowed (BOS <= 2)";
     color entryPermColor = clrLime;
     if(g_chochPending)
@@ -921,13 +823,11 @@ void UpdateInfoTable()
         entryPermStr = "No Entry (BOS >= 3)";
         entryPermColor = clrRed;
     }
-
     int x = 20;
     int yStart = 20;
     int yStep = 18;
     int line = 0;
     string pfx = OBJ_PFX + "PANEL_";
-
     CreateLabel(pfx + "0", x, yStart + (line++) * yStep, "Current ATR Count: " + IntegerToString(g_currentATRCount), clrYellow, 10);
     
     string structName;
@@ -961,8 +861,6 @@ void UpdateInfoTable()
     CreateLabel(pfx + "8", x, yStart + (line++) * yStep, "Status  : " + entryPermStr, entryPermColor, 10);
     CreateLabel(pfx + "9", x, yStart + (line++) * yStep, "=== M5 PA Scalping ===", clrYellow, 10);
 }
-
-
 double GetMostRecentOppositeOBLevel(int chochBias)
 {
     int targetBias = (chochBias == BEARISH) ? BULLISH : BEARISH;
@@ -975,8 +873,6 @@ double GetMostRecentOppositeOBLevel(int chochBias)
     }
     return 0.0;
 }
-
-
 //=================================================================
 // PROCESS ONE BAR
 //=================================================================
@@ -991,21 +887,17 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
     double l = rates[0].low;
     double c = rates[0].close;
     datetime t = rates[0].time;
+    datetime confirmTime = t + PeriodSeconds();
     double nLoss = 0;
     bool tfChochBull = false, tfChochBear = false, tfBosBull = false, tfBosBear = false;
     string structStr = "";
-
     isChoch = false;
     isBos   = false;
     isAtr   = false;
-
     UpdateParsed(h, l, atr200Val, t, barIdx);
-
     nLoss = InpAtrKey * atrVal;
     UpdateATR(o, h, l, c, nLoss);
-
     UpdateTFStructure(rates, t, tfChochBull, tfChochBear, tfBosBull, tfBosBear, barIdx);
-
     // 1. Process CHOCH / BOS signals
     if(tfChochBull)
     {
@@ -1013,19 +905,19 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
         g_chochPendingDirection = 1;
         g_chochPendingOBLevel = GetMostRecentOppositeOBLevel(1);
         g_tfTrendBiasConfirmed = false;
+        g_currentBOSCount = 0;
+        g_currentATRCount = 0;
         if(g_chochPendingOBLevel == 0.0)
         {
             g_chochPending = false;
             g_tfTrendBias = BULLISH;
             g_tfTrendBiasConfirmed = true;
-            g_currentBOSCount = 0;
-            g_currentATRCount = 0;
             g_lastStructureType = 1; // CHOCH
             g_lastStructureDirection = 1; // Bullish
             g_lastStructureCount = 0;
             isChoch = true;
             if(printLog)
-                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bullish XIN (Immediate) confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bullish XIN (Immediate) confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
             if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
                 ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_GREEN);
             if(g_pendingChochTextObj != "" && ObjectFind(g_pendingChochTextObj) >= 0)
@@ -1040,19 +932,19 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
         g_chochPendingDirection = -1;
         g_chochPendingOBLevel = GetMostRecentOppositeOBLevel(-1);
         g_tfTrendBiasConfirmed = false;
+        g_currentBOSCount = 0;
+        g_currentATRCount = 0;
         if(g_chochPendingOBLevel == 0.0)
         {
             g_chochPending = false;
             g_tfTrendBias = BEARISH;
             g_tfTrendBiasConfirmed = true;
-            g_currentBOSCount = 0;
-            g_currentATRCount = 0;
             g_lastStructureType = 1; // CHOCH
             g_lastStructureDirection = -1; // Bearish
             g_lastStructureCount = 0;
             isChoch = true;
             if(printLog)
-                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bearish XIN (Immediate) confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bearish XIN (Immediate) confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
             if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
                 ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_RED);
             if(g_pendingChochTextObj != "" && ObjectFind(g_pendingChochTextObj) >= 0)
@@ -1061,7 +953,6 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             g_pendingChochTextObj = "";
         }
     }
-
     if(g_chochPending)
     {
         if(g_chochPendingDirection == 1) // Bullish
@@ -1078,8 +969,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 g_lastStructureCount = 0;
                 isChoch = true;
                 if(printLog)
-                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bullish XIN confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
-
+                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bullish XIN confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
                 if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_GREEN);
                 if(g_pendingChochTextObj != "" && ObjectFind(g_pendingChochTextObj) >= 0)
@@ -1102,8 +992,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 g_lastStructureCount = 0;
                 isChoch = true;
                 if(printLog)
-                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bearish XIN confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
-
+                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] CHOCH Bearish XIN confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
                 if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_RED);
                 if(g_pendingChochTextObj != "" && ObjectFind(g_pendingChochTextObj) >= 0)
@@ -1113,7 +1002,6 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             }
         }
     }
-
     if(!g_chochPending && !g_tfTrendBiasConfirmed)
     {
         if(g_tfTrendBias == BULLISH)
@@ -1129,7 +1017,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 isChoch = true;
                 
                 if(printLog)
-                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BULLISH confirmed by breaking OB at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BULLISH confirmed by breaking OB at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
                 
                 if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_GREEN);
@@ -1152,7 +1040,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
                 isChoch = true;
                 
                 if(printLog)
-                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BEARISH confirmed by breaking OB at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                    Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] Trend Bias BEARISH confirmed by breaking OB at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
                 
                 if(g_pendingChochLineObj != "" && ObjectFind(g_pendingChochLineObj) >= 0)
                     ObjectSetInteger(0, g_pendingChochLineObj, OBJPROP_COLOR, C_RED);
@@ -1163,7 +1051,6 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             }
         }
     }
-
     if(tfBosBull)
     {
         g_chochPending = false;
@@ -1174,7 +1061,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
         g_lastStructureCount = g_currentBOSCount;
         isBos = true;
         if(printLog)
-            Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] BOS Bullish #", g_currentBOSCount, " confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+            Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] BOS Bullish #", g_currentBOSCount, " confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
     }
     else if(tfBosBear)
     {
@@ -1186,9 +1073,8 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
         g_lastStructureCount = g_currentBOSCount;
         isBos = true;
         if(printLog)
-            Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] BOS Bearish #", g_currentBOSCount, " confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+            Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] BOS Bearish #", g_currentBOSCount, " confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
     }
-
     // 2. Process ATR signals (must check against structure bias)
     if(g_tfTrendBias == BULLISH && g_atrBuy)
     {
@@ -1198,7 +1084,7 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             isAtr = true;
             structStr = (g_lastStructureType == 1) ? "CHOCH Bullish" : ("BOS Bullish #" + IntegerToString(g_lastStructureCount));
             if(printLog)
-                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] ATR Bullish #", g_currentATRCount, " of ", structStr, " confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] ATR Bullish #", g_currentATRCount, " of ", structStr, " confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
         }
     }
     else if(g_tfTrendBias == BEARISH && g_atrSell)
@@ -1209,28 +1095,21 @@ void ProcessBar(const MqlRates &rates[], int totalRates,
             isAtr = true;
             structStr = (g_lastStructureType == 1) ? "CHOCH Bearish" : ("BOS Bearish #" + IntegerToString(g_lastStructureCount));
             if(printLog)
-                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] ATR Bearish #", g_currentATRCount, " of ", structStr, " confirmed at ", TimeToString(t, TIME_DATE|TIME_MINUTES));
+                Print("[XAUUSD ", Symbol(), " ", EnumToString((ENUM_TIMEFRAMES)Period()), "] ATR Bearish #", g_currentATRCount, " of ", structStr, " confirmed at ", TimeToString(confirmTime, TIME_DATE|TIME_MINUTES));
         }
     }
-
     g_tf_chochBull = isChoch && (g_lastStructureDirection == 1);
     g_tf_chochBear = isChoch && (g_lastStructureDirection == -1);
     g_tf_bosBull   = isBos && (g_lastStructureDirection == 1);
     g_tf_bosBear   = isBos && (g_lastStructureDirection == -1);
-
     bool sessionOK = SessionOKAt(t);
     RunStateMachine(c, h, l, o, t, sessionOK);
-
     DeleteMitigatedTFOBs(c, h, l);
-
     int periodSec = PeriodSeconds();
     UpdateSessionBoxes(t, h, l, periodSec);
-
     DrawTFOrderBlocks(t + periodSec);
-
     g_initialized = true;
 }
-
 //=================================================================
 // OnInit
 //=================================================================
@@ -1245,20 +1124,29 @@ int OnInit()
     SetIndexBuffer(6, g_lastStructTypeBuf);
     SetIndexBuffer(7, g_lastStructCountBuf);
     SetIndexBuffer(8, g_atrCountBuf);
-
+    SetIndexBuffer(9, g_obBullBuf);
+    SetIndexBuffer(10, g_obBearBuf);
+    SetIndexBuffer(11, g_stateBuf);
+    SetIndexBuffer(12, g_chochPendingBuf);
+    SetIndexBuffer(13, g_biasBuf);
+    SetIndexBuffer(14, g_currentBOSCountBuf);
     SetIndexStyle(0, DRAW_LINE, STYLE_SOLID, 1, clrDodgerBlue);
     SetIndexStyle(1, DRAW_ARROW, STYLE_SOLID, 1, C'8,153,129');
     SetIndexArrow(1, 233); // up arrow
     SetIndexStyle(2, DRAW_ARROW, STYLE_SOLID, 1, C'242,54,69');
     SetIndexArrow(2, 234); // down arrow
-
     SetIndexStyle(3, DRAW_NONE);
     SetIndexStyle(4, DRAW_NONE);
     SetIndexStyle(5, DRAW_NONE);
     SetIndexStyle(6, DRAW_NONE);
     SetIndexStyle(7, DRAW_NONE);
     SetIndexStyle(8, DRAW_NONE);
-
+    SetIndexStyle(9, DRAW_NONE);
+    SetIndexStyle(10, DRAW_NONE);
+    SetIndexStyle(11, DRAW_NONE);
+    SetIndexStyle(12, DRAW_NONE);
+    SetIndexStyle(13, DRAW_NONE);
+    SetIndexStyle(14, DRAW_NONE);
     SetIndexEmptyValue(0, 0.0);
     SetIndexEmptyValue(1, 0.0);
     SetIndexEmptyValue(2, 0.0);
@@ -1268,7 +1156,12 @@ int OnInit()
     SetIndexEmptyValue(6, 0.0);
     SetIndexEmptyValue(7, 0.0);
     SetIndexEmptyValue(8, 0.0);
-
+    SetIndexEmptyValue(9, 0.0);
+    SetIndexEmptyValue(10, 0.0);
+    SetIndexEmptyValue(11, 0.0);
+    SetIndexEmptyValue(12, 0.0);
+    SetIndexEmptyValue(13, 0.0);
+    SetIndexEmptyValue(14, 0.0);
     SetIndexLabel(0, "ATR Stop");
     SetIndexLabel(1, "ATR Buy");
     SetIndexLabel(2, "ATR Sell");
@@ -1278,11 +1171,15 @@ int OnInit()
     SetIndexLabel(6, "Last Struct Type");
     SetIndexLabel(7, "Last Struct Count");
     SetIndexLabel(8, "ATR Count");
-
+    SetIndexLabel(9, "OB Bull");
+    SetIndexLabel(10, "OB Bear");
+    SetIndexLabel(11, "State");
+    SetIndexLabel(12, "Choch Pending OB");
+    SetIndexLabel(13, "Bias");
+    SetIndexLabel(14, "BOS Count");
     Print("XAUUSD PA Scalping Indicator M5 initialized.");
     return INIT_SUCCEEDED;
 }
-
 //=================================================================
 // OnDeinit
 //=================================================================
@@ -1292,7 +1189,6 @@ void OnDeinit(const int reason)
     Comment("");
     ChartRedraw(0);
 }
-
 //=================================================================
 // OnCalculate — main loop
 //=================================================================
@@ -1311,7 +1207,6 @@ int OnCalculate(const int      rates_total,
     int i = 0, k = 0, s = 0, obK = 0;
     
     if(rates_total < minBars) return 0;
-
     int prevCalculated = prev_calculated;
     static int last_rates_total = 0;
     if(prevCalculated == 0 || last_rates_total == 0 || rates_total < last_rates_total || (rates_total - last_rates_total) > 2)
@@ -1319,7 +1214,6 @@ int OnCalculate(const int      rates_total,
         prevCalculated = 0;
     }
     last_rates_total = rates_total;
-
     ArrayResize(g_tfOBsHistory, rates_total);
     ArrayResize(g_currentBOSCountHistory, rates_total);
     ArrayResize(g_chochPendingHistory, rates_total);
@@ -1347,13 +1241,11 @@ int OnCalculate(const int      rates_total,
     ArrayResize(g_cycleSLHistory, rates_total);
     ArrayResize(g_cycleSL_chochHistory, rates_total);
     ArrayResize(g_tfTrendBiasConfirmedHistory, rates_total);
-
     ArraySetAsSeries(time,  false);
     ArraySetAsSeries(open,  false);
     ArraySetAsSeries(high,  false);
     ArraySetAsSeries(low,   false);
     ArraySetAsSeries(close, false);
-
     ArraySetAsSeries(g_atrStopBuf,  false);
     ArraySetAsSeries(g_atrBuyBuf,   false);
     ArraySetAsSeries(g_atrSellBuf,  false);
@@ -1363,11 +1255,15 @@ int OnCalculate(const int      rates_total,
     ArraySetAsSeries(g_lastStructTypeBuf,  false);
     ArraySetAsSeries(g_lastStructCountBuf, false);
     ArraySetAsSeries(g_atrCountBuf,  false);
-
+    ArraySetAsSeries(g_obBullBuf,   false);
+    ArraySetAsSeries(g_obBearBuf,   false);
+    ArraySetAsSeries(g_stateBuf,    false);
+    ArraySetAsSeries(g_chochPendingBuf, false);
+    ArraySetAsSeries(g_biasBuf,     false);
+    ArraySetAsSeries(g_currentBOSCountBuf, false);
     if(prevCalculated == 0)
     {
         DeleteAllObjects();
-
         g_state=0; g_bias=0;
         g_cycleSL=0; g_cycleSL_choch=0;
         g_bosSeen=false;
@@ -1391,9 +1287,7 @@ int OnCalculate(const int      rates_total,
         g_chochPendingDirection = 0;
         g_chochPendingOBLevel = 0.0;
         g_tfTrendBiasConfirmed = false;
-
         for(s=0;s<4;s++) { g_sessWas[s]=false; g_sessBoxName[s]=""; g_sessLblName[s]=""; }
-
         ArrayInitialize(g_atrStopBuf,  0.0);
         ArrayInitialize(g_atrBuyBuf,   0.0);
         ArrayInitialize(g_atrSellBuf,  0.0);
@@ -1403,6 +1297,12 @@ int OnCalculate(const int      rates_total,
         ArrayInitialize(g_lastStructTypeBuf, 0.0);
         ArrayInitialize(g_lastStructCountBuf, 0.0);
         ArrayInitialize(g_atrCountBuf, 0.0);
+        ArrayInitialize(g_obBullBuf,   0.0);
+        ArrayInitialize(g_obBearBuf,   0.0);
+        ArrayInitialize(g_stateBuf,    0.0);
+        ArrayInitialize(g_chochPendingBuf, 0.0);
+        ArrayInitialize(g_biasBuf,     0.0);
+        ArrayInitialize(g_currentBOSCountBuf, 0.0);
         
         ArrayInitialize(g_parsedHighs, 0.0);
         ArrayInitialize(g_parsedLows,  0.0);
@@ -1410,16 +1310,13 @@ int OnCalculate(const int      rates_total,
         ArrayInitialize(g_actualLows,  0.0);
         ArrayInitialize(g_obTimes,     0);
     }
-
     int start = (prevCalculated == 0) ? MathMax(InpAtrPeriod + 1, rates_total - 5000) : MathMax(0, prevCalculated - 1);
     int lookback = MathMax(InpSwingLen, InpAtrPeriod) + 5;
-
     ArrayResize(g_parsedHighs, rates_total);
     ArrayResize(g_parsedLows,  rates_total);
     ArrayResize(g_actualHighs, rates_total);
     ArrayResize(g_actualLows,  rates_total);
     ArrayResize(g_obTimes,     rates_total);
-
     for(i = start; i < rates_total - 1; i++)
     {
         if(i > 0 && (i > start || prevCalculated > 0))
@@ -1495,7 +1392,6 @@ int OnCalculate(const int      rates_total,
                 g_tfOBs[obK].boxName = "";
             }
         }
-
         int avail = MathMin(lookback, i + 1);
         MqlRates rates[];
         ArraySetAsSeries(rates, false);
@@ -1509,17 +1405,13 @@ int OnCalculate(const int      rates_total,
             rates[k].close = close[srcIdx];
             rates[k].time  = time[srcIdx];
         }
-
         int shift = rates_total - 1 - i;
         double atrVal    = iATR(NULL, 0, InpAtrPeriod, shift);
         double atr200Val = iATR(NULL, 0, 200, shift);
-
         bool isChoch = false;
         bool isBos = false;
         bool isAtr = false;
-
         ProcessBar(rates, avail, atrVal, atr200Val, (i >= rates_total - 3), isChoch, isBos, isAtr, i);
-
         g_atrStopBuf[i]  = g_xATRStop;
         g_atrBuyBuf[i]   = (g_atrBuy  && InpShowATRSignal) ? low[i]  - atrVal * 0.5 : 0.0;
         g_atrSellBuf[i]  = (g_atrSell && InpShowATRSignal) ? high[i] + atrVal * 0.5 : 0.0;
@@ -1530,7 +1422,14 @@ int OnCalculate(const int      rates_total,
         g_lastStructTypeBuf[i]   = (double)g_lastStructureType;
         g_lastStructCountBuf[i]  = !g_tfTrendBiasConfirmed ? 99.0 : (double)g_lastStructureCount;
         g_atrCountBuf[i]         = (double)g_currentATRCount;
-
+        double obBullVal = GetLatestActiveOBLevel(BULLISH);
+        double obBearVal = GetLatestActiveOBLevel(BEARISH);
+        g_obBullBuf[i]           = obBullVal;
+        g_obBearBuf[i]           = obBearVal;
+        g_stateBuf[i]            = (double)g_state;
+        g_chochPendingBuf[i]     = g_chochPending ? g_chochPendingOBLevel : 0.0;
+        g_biasBuf[i]             = (double)g_bias;
+        g_currentBOSCountBuf[i]  = (double)g_currentBOSCount;
         g_currentBOSCountHistory[i] = g_currentBOSCount;
         g_chochPendingHistory[i] = g_chochPending;
         g_chochPendingDirectionHistory[i] = g_chochPendingDirection;
@@ -1563,9 +1462,7 @@ int OnCalculate(const int      rates_total,
             g_tfOBsHistory[i].ob[obK] = g_tfOBs[obK];
         }
     }
-
     UpdateInfoTable();
     ChartRedraw(0);
-
     return rates_total;
 }
